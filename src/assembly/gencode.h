@@ -68,10 +68,14 @@ class GenCode {
         std::unique_ptr<RegisterManager> regManager; // Register manager to handle register allocation
         std::fstream outputFile; // Output file stream for generated code
         
-        int cgload(int value) {
+        int cgload(Value value) {
             // Load the value into a register and return the register index
             int reg = regManager->allocateRegister();
-            outputFile << "\tmovq\t$" << value << ", " << regManager->getRegister(reg) << "\n";
+            if (value.type == T_INTLIT) {
+                outputFile << "\tmovq\t$" << value.ivalue << ", " << regManager->getRegister(reg) << "\n";
+            } else {
+                throw std::runtime_error("GenCode::cgload: Only Support int value type for loading into register");
+            }
             return reg;
         }
 
@@ -89,6 +93,12 @@ class GenCode {
             return reg1; // Return the register containing the result
         }
 
+        int cgneg(int reg) {
+            // Negate the value in the specified register
+            outputFile << "\tnegq\t" << regManager->getRegister(reg) << "\n";
+            return reg; // Return the register containing the negated value
+        }
+        
         int cgmul(int reg1, int reg2) {
             // Multiply the value in reg1 by the value in reg2 and return the result in reg1
             outputFile << "\timulq\t" << regManager->getRegister(reg1) << ", " << regManager->getRegister(reg2) << "\n";

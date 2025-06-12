@@ -14,12 +14,18 @@ int GenCode::walkAST(const std::shared_ptr<ASTNode>& ast) {
                 throw std::runtime_error("GenCode::generate: Unknown binary expression type");
         }
     } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(ast)) {
+        int reg = walkAST(y->getExpr()); // Walk the expression in the unary node
         // Handle unary expression node
-        if (y->getType() == U_INT) {
-            return cgload(y->getValue()); // Load the integer value into a register
+        if (y->getOp() == U_MINUS) {
+            return cgneg(reg); // Load the integer value into a register
+        } else if (y->getOp() == U_PLUS) {
+            return reg;
         } else {
             throw std::runtime_error("GenCode::generate: Unknown unary expression type");
         }
+    } else if (auto z = std::dynamic_pointer_cast<ValueNode>(ast)) {
+        // Handle value node
+        return cgload(z->getValue()); // Load the value into a register
     } else {
         throw std::runtime_error("GenCode::generate: Unknown AST node type");
     }

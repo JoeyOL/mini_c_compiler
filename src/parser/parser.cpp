@@ -13,10 +13,20 @@ std::shared_ptr<ASTNode> Parser::parseBinaryExpression() {
 
 std::shared_ptr<ASTNode> Parser::parimary() {
     const Token &tok = toks[current++];
-    if (tok.type == T_INTLIT) {
-        return std::make_shared<UnaryExpNode>(UnaryType::U_INT, tok.value); // Assuming ASTNode can be constructed with an integer value
-    }
-    else {
+    if (tok.type == T_PLUS || tok.type == T_MINUS) {
+        return std::make_shared<UnaryExpNode>(tok.type == T_PLUS ? U_PLUS : U_MINUS, parimary());
+    } else if (tok.type == T_LPAREN) {
+        auto ret = parseBinaryExpressionWithPrecedence(0);
+        if (current >= toks.size() || toks[current].type != T_RPAREN) {
+            throw std::runtime_error("Parser::parimary: Expected ')' at line " + 
+                std::to_string(tok.line_no) + ", column " + 
+                std::to_string(tok.column_no));
+        }
+        current++; // Skip the closing parenthesis
+        return ret;
+    } else if (tok.type == T_INTLIT || tok.type == T_FLOATLIT) {
+        return std::make_shared<ValueNode>(tok.value);
+    } else {
         throw std::runtime_error("Parser::parimary: Unexpected token type" + 
             std::to_string(tok.type) + " at line " + 
             std::to_string(tok.line_no) + ", column " + 
@@ -40,14 +50,14 @@ ExprType Parser::arithop(const Token &tok) {
 
 std::shared_ptr<ASTNode> Parser::parseBinaryExpressionWithPrecedence(int prev_precedence) {
     std::shared_ptr<ASTNode> left = parimary();
-    if (current >= toks.size()) {
+    if (current >= toks.size() || toks[current].type == T_RPAREN) {
         return left; // If no token is available, return the left node
     }
     while (precedence.at(arithop(toks[current])) > prev_precedence) {
         ExprType type = arithop(toks[current++]);
         std::shared_ptr<ASTNode> right = parseBinaryExpressionWithPrecedence(precedence.at(type));
         left = std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
-        if (current >= toks.size()) {
+        if (current >= toks.size() || toks[current].type == T_RPAREN) {
             return left; // If no token is available, return the left node
         }
     }
