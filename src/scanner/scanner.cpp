@@ -88,5 +88,7 @@ bool Scanner::scan(Token& token) {
                                  + " at line " + std::to_string(line_no) 
                                  + ", column " + std::to_string(column_no));
     }
+    token.line_no = line_no;
+    token.column_no = column_no;
     return true;
 }

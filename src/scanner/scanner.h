@@ -1,6 +1,8 @@
 #include <string>
 #include <fstream>
 #include "common/defs.h"
+#pragma once
+
 class Scanner {
     public:
         // Constructor

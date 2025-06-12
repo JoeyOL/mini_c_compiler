@@ -1,6 +1,8 @@
 #include "common/defs.h"
 #include "scanner/scanner.h"
+#include "parser/parser.h"
 #include <iostream>
+#include <vector>
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
@@ -10,6 +12,7 @@ int main(int argc, char *argv[]) {
     try {
         Scanner scanner = Scanner(argv[1]);
         Token token;
+        std::vector<Token> tokens;
         while (scanner.scan(token)) {
             switch (token.type) {
             case T_INTLIT:
@@ -28,8 +31,16 @@ int main(int argc, char *argv[]) {
                 std::cout << "Slash Operator" << std::endl;
                 break;
             }
+            tokens.push_back(token);
         }
         std::cout << "End of file reached." << std::endl;
+
+        Parser parser = Parser(tokens);
+        std::unique_ptr<ASTNode> ast = parser.parseBinaryExpression();
+        std::cout << "Parsed AST successfully." << std::endl;
+        ast->walk(); // Walk the AST to print the structure and values
+        std::cout << "AST walk completed." << std::endl;
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
