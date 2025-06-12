@@ -1,6 +1,7 @@
 #include "common/defs.h"
 #include "scanner/scanner.h"
 #include "parser/parser.h"
+#include "assembly/gencode.h"
 #include <iostream>
 #include <vector>
 
@@ -42,6 +43,11 @@ int main(int argc, char *argv[]) {
         std::cout << "Parsed AST successfully." << std::endl;
         ast->walk(); // Walk the AST to print the structure and values
         std::cout << "AST walk completed." << std::endl;
+
+        // Code generation would go here, e.g., generating assembly code from the AST
+        GenCode genCode("output.s");
+        genCode.generate(ast);
+        std::cout << "Code generation completed. Output written to output.s." << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

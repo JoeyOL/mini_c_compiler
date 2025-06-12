@@ -10,8 +10,8 @@ class BinaryExpNode : public ASTNode {
             : type(type), left(std::move(left)), right(std::move(right)) {}
 
         ExprType getType() const { return type; }
-        const ASTNode* getLeft() const { return left.get(); }
-        const ASTNode* getRight() const { return right.get(); }
+        std::shared_ptr<ASTNode> getLeft() const { return left; }
+        std::shared_ptr<ASTNode> getRight() const { return right; }
         std::string convertTypeToString() const {
             static const std::map<ExprType, std::string> typeToString = {
                 {A_ADD, "Addition"},
