@@ -4,10 +4,17 @@
 #include <map>
 #pragma once
 
-class BinaryExpNode : public ASTNode {
+class BinaryExpNode : public ExprNode {
     public:
         BinaryExpNode(ExprType type, std::shared_ptr<ASTNode> left, std::shared_ptr<ASTNode> right)
-            : type(type), left(std::move(left)), right(std::move(right)) {}
+            : type(type), left(std::move(left)), right(std::move(right)) {
+                if (this->left->getType() == T_FLOATLIT || 
+                    this->right->getType() == T_FLOATLIT) {
+                    value.setFloatValue(0.0); // Initialize to float if any operand is float
+                } else {
+                    value.setIntValue(0); // Initialize to int otherwise
+                }
+            }
 
         ExprType getType() const { return type; }
         std::shared_ptr<ASTNode> getLeft() const { return left; }
@@ -18,7 +25,6 @@ class BinaryExpNode : public ASTNode {
                 {A_SUBTRACT, "Subtraction"},
                 {A_MULTIPLY, "Multiplication"},
                 {A_DIVIDE, "Division"},
-                {A_INTLIT, "Integer Literal"}
             };
             auto it = typeToString.find(type);
             if (it != typeToString.end()) {
@@ -33,8 +39,8 @@ class BinaryExpNode : public ASTNode {
             left->walk();
             right->walk();
             std::cout << "Binary Expression: " << convertTypeToString();
-            std::cout << " (Left: " << (left->getValue()) 
-                      << ", Right: " << (right->getValue()) << ")";
+            std::cout << " (Left: " << (left->getValue().toString()) 
+                      << ", Right: " << (right->getValue().toString()) << ")";
             switch (type) {
                 case A_ADD:
                     value = left->getValue() + right->getValue();
@@ -46,7 +52,8 @@ class BinaryExpNode : public ASTNode {
                     value = left->getValue() * right->getValue();
                     break;
                 case A_DIVIDE:
-                    if (right->getValue() == 0) {
+                    if (right->getValue() == Value{T_INTLIT, .ivalue = 0} 
+                        || right->getValue() == Value{T_FLOATLIT, .fvalue = 0.0}) {
                         throw std::runtime_error("Division by zero error");
                     }
                     value = left->getValue() / right->getValue();
@@ -54,7 +61,7 @@ class BinaryExpNode : public ASTNode {
                 default:
                     throw std::runtime_error("Unknown binary expression type");
             }
-            std::cout << " Result: " << value << std::endl;
+            std::cout << " Result: " << value.toString() << std::endl;
         }
 
     private:

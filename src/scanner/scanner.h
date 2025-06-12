@@ -21,4 +21,5 @@ class Scanner {
         void putback(char c);
         int scanint(int c);
         char next();
+        void scanNumeric(Token& token, char c);
 };

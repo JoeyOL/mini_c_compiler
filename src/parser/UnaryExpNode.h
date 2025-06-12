@@ -3,17 +3,23 @@
 #include <iostream>  
 #pragma once
 
-class UnaryExpNode : public ASTNode {
+class UnaryExpNode : public ExprNode {
     public:
-        UnaryExpNode(UnaryType type, int value): type(type) {
-            this->value = value; // Assuming ASTNode has a value field
+        UnaryExpNode(UnaryOp op, std::shared_ptr<ASTNode> expr): op(op), expr(std::move(expr)) {
+            if (this->expr->getType() == T_FLOATLIT) {
+                value.setFloatValue(0.0); // Initialize to float if the expression is float
+            } else {
+                value.setIntValue(0); // Initialize to int otherwise
+            }
         }
-        UnaryType getType() const { return type; }
-        int getValue() const { return value; }
+        UnaryOp getOp() const { return op; }
+        std::shared_ptr<ASTNode> getExpr() const { return expr; }
         std::string convertTypeToString() const {
-            switch (type) {
-                case U_INT:
-                    return "Unary Integer";
+            switch (op) {
+                case U_PLUS:
+                    return "Unary Plus Expression";
+                case U_MINUS:
+                    return "Unary Minus Expression";
                 default:
                     return "Unknown Unary Type";
             }
@@ -21,8 +27,15 @@ class UnaryExpNode : public ASTNode {
         void walk() override {
             // Implement the walk method to traverse the unary expression node
             // This could involve visiting the operand, etc.
-            std::cout << "Unary Expression: " << convertTypeToString() << " with value: " << value << std::endl;
+            expr->walk();
+            if (op == U_MINUS) {
+                value = -expr->getValue(); // Negate the value for unary minus
+            } else {
+                value = expr->getValue(); // For unary plus, just return the value
+            }
+            std::cout << "Unary Expression: " << convertTypeToString() << "Result: " << value.toString() << std::endl;
         }
     private:
-        UnaryType type;
+        UnaryOp op;
+        std::shared_ptr<ASTNode> expr;
 };

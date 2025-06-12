@@ -1,6 +1,7 @@
 #include "scanner/scanner.h"
 #include <iostream>
 #include <filesystem>
+#include <cmath>
 
 void Scanner::skip() {
     char c = next();
@@ -43,6 +44,60 @@ int Scanner::scanint(int c) {
     return value;
 }
 
+void Scanner::scanNumeric(Token& token, char c) {
+    if ((c < '0' || c > '9') && c != '.') {
+        throw std::runtime_error("Invalid numeric character: " + std::string(1, c) 
+                                 + " at line " + std::to_string(line_no) 
+                                 + ", column " + std::to_string(column_no));
+    }
+
+    int integer_part = 0;
+    if (c != '.') {
+        integer_part = scanint(c);
+        token.type = T_INTLIT;
+        token.value.setIntValue(integer_part);
+        c = next();
+    }
+
+    if (c == '.') {
+        c = next();
+        if (c < '0' || c > '9') {
+            throw std::runtime_error("Invalid fractional part: " + std::string(1, c) 
+                                     + " at line " + std::to_string(line_no) 
+                                     + ", column " + std::to_string(column_no));
+        }
+        double fractional_part = scanint(c);
+        double value = integer_part + fractional_part / std::pow(10, std::to_string((int)fractional_part).length());
+        token.type = T_FLOATLIT;
+        token.value.setFloatValue(value);
+    } else if (c == 'e' || c == 'E') {
+        // Handle scientific notation
+        int exponent = 0;
+        c = next();
+        bool negativeExponent = false;
+        if (c == '-') {
+            negativeExponent = true;
+            c = next();
+        } else if (c == '+') {
+            c = next();
+        }
+        if (c < '0' || c > '9') {
+            throw std::runtime_error("Invalid exponent: " + std::string(1, c) 
+                                     + " at line " + std::to_string(line_no) 
+                                     + ", column " + std::to_string(column_no));
+        }
+        exponent = scanint(c);
+        if (negativeExponent) {
+            exponent = -exponent;
+        }
+        double value = integer_part * std::pow(10, exponent);
+        token.type = T_FLOATLIT;
+        token.value.setFloatValue(value);
+    } else {
+        putback(c);
+    }
+}
+
 Scanner::Scanner(const std::string& source_path)
     : line_no(1), column_no(0), putback_char(0), source_path(source_path) {
 
@@ -60,30 +115,21 @@ bool Scanner::scan(Token& token) {
         return false;
     }
     
-    switch (c) {
-    case '+':
+    if (c == '+') {
         token.type = T_PLUS;
-        token.value = 0; // No value for operators
-        break;
-    case '-':
+    } else if (c == '-') {
         token.type = T_MINUS;
-        token.value = 0; // No value for operators
-        break;
-    case '*':
+    } else if (c == '*') {
         token.type = T_STAR;
-        token.value = 0; // No value for operators
-        break;
-    case '/':
+    } else if (c == '/') {
         token.type = T_SLASH;
-        token.value = 0; // No value for operators
-        break;
-    case '0': case '1': case '2': case '3':
-    case '4': case '5': case '6': case '7':
-    case '8': case '9':
-        token.type = T_INTLIT;
-        token.value = scanint(c);
-        break;
-    default:
+    } else if ((c >= '0' && c <= '9') || c == '.') {
+        scanNumeric(token, c);
+    } else if (c == '(') {
+        token.type = T_LPAREN;
+    } else if (c == ')') {
+        token.type = T_RPAREN;
+    }else {
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 
                                  + " at line " + std::to_string(line_no) 
                                  + ", column " + std::to_string(column_no));

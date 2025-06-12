@@ -17,7 +17,10 @@ int main(int argc, char *argv[]) {
         while (scanner.scan(token)) {
             switch (token.type) {
             case T_INTLIT:
-                std::cout << "Integer Literal: " << token.value << std::endl;
+                std::cout << "Integer Literal: " << token.value.ivalue << std::endl;
+                break;
+            case T_FLOATLIT:
+                std::cout << "Float Literal: " << token.value.fvalue << std::endl;
                 break;
             case T_PLUS:
                 std::cout << "Plus Operator" << std::endl;
@@ -38,8 +41,8 @@ int main(int argc, char *argv[]) {
 
         Parser parser = Parser(tokens);
         // std::shared_ptr<ASTNode> ast = parser.parseBinaryExpression();
-        // std::shared_ptr<ASTNode> ast = parser.parseBinaryExpressionWithPrecedence(0);
-        std::shared_ptr<ASTNode> ast = parser.parseAdditiveExpression();
+        std::shared_ptr<ASTNode> ast = parser.parseBinaryExpressionWithPrecedence(0);
+        // std::shared_ptr<ASTNode> ast = parser.parseAdditiveExpression();
         std::cout << "Parsed AST successfully." << std::endl;
         ast->walk(); // Walk the AST to print the structure and values
         std::cout << "AST walk completed." << std::endl;
