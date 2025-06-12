@@ -15,6 +15,8 @@ add_executable(scanner
     src/parser/BinaryExpNode.h
     src/parser/UnaryExpNode.h
     src/parser/parser.h
+    src/assembly/gencode.cpp
+    src/assembly/gencode.h
 )
 
 target_include_directories(scanner PRIVATE
