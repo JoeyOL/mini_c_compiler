@@ -11,6 +11,10 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g")
 add_executable(scanner
     src/main.cpp
     src/scanner/scanner.cpp
+    src/parser/parser.cpp
+    src/parser/BinaryExpNode.h
+    src/parser/UnaryExpNode.h
+    src/parser/parser.h
 )
 
 target_include_directories(scanner PRIVATE
