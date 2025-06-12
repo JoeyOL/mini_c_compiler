@@ -6,7 +6,7 @@
 
 class BinaryExpNode : public ASTNode {
     public:
-        BinaryExpNode(ExprType type, std::unique_ptr<ASTNode> left, std::unique_ptr<ASTNode> right)
+        BinaryExpNode(ExprType type, std::shared_ptr<ASTNode> left, std::shared_ptr<ASTNode> right)
             : type(type), left(std::move(left)), right(std::move(right)) {}
 
         ExprType getType() const { return type; }
@@ -59,6 +59,6 @@ class BinaryExpNode : public ASTNode {
 
     private:
         ExprType type;
-        std::unique_ptr<ASTNode> left;
-        std::unique_ptr<ASTNode> right;
+        std::shared_ptr<ASTNode> left;
+        std::shared_ptr<ASTNode> right;
 };

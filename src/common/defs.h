@@ -1,3 +1,4 @@
+#include <map>
 #pragma once
 
 enum {
@@ -27,4 +28,12 @@ class ASTNode {
         virtual int getValue() const { return value; } // Default implementation for ASTNode
     protected:
         int value; // For A_INTLIT
+};
+
+static const std::map<ExprType, int> precedence = {
+    {A_ADD, 1},
+    {A_SUBTRACT, 1},
+    {A_MULTIPLY, 2},
+    {A_DIVIDE, 2},
+    {A_INTLIT, 0} // Integer literals have the lowest precedence
 };

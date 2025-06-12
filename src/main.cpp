@@ -36,7 +36,9 @@ int main(int argc, char *argv[]) {
         std::cout << "End of file reached." << std::endl;
 
         Parser parser = Parser(tokens);
-        std::unique_ptr<ASTNode> ast = parser.parseBinaryExpression();
+        // std::shared_ptr<ASTNode> ast = parser.parseBinaryExpression();
+        // std::shared_ptr<ASTNode> ast = parser.parseBinaryExpressionWithPrecedence(0);
+        std::shared_ptr<ASTNode> ast = parser.parseAdditiveExpression();
         std::cout << "Parsed AST successfully." << std::endl;
         ast->walk(); // Walk the AST to print the structure and values
         std::cout << "AST walk completed." << std::endl;
