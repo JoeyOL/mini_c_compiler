@@ -1,17 +1,17 @@
 #include "parser/parser.h"
 
 
-std::shared_ptr<ASTNode> Parser::parseBinaryExpression() {
-    std::shared_ptr<ASTNode> left = parimary();
+std::shared_ptr<ExprNode> Parser::parseBinaryExpression() {
+    std::shared_ptr<ExprNode> left = parimary();
     if (current >= toks.size()) {
         return left; // If no token is available, return the left node
     }
     ExprType type = arithop(toks[current++]);
-    std::shared_ptr<ASTNode> right = parseBinaryExpression();
+    std::shared_ptr<ExprNode> right = parseBinaryExpression();
     return std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
 }
 
-std::shared_ptr<ASTNode> Parser::parimary() {
+std::shared_ptr<ExprNode> Parser::parimary() {
     const Token &tok = toks[current++];
     if (tok.type == T_PLUS || tok.type == T_MINUS) {
         return std::make_shared<UnaryExpNode>(tok.type == T_PLUS ? U_PLUS : U_MINUS, parimary());
@@ -24,7 +24,7 @@ std::shared_ptr<ASTNode> Parser::parimary() {
         }
         current++; // Skip the closing parenthesis
         return ret;
-    } else if (tok.type == T_INTLIT || tok.type == T_FLOATLIT) {
+    } else if (tok.type == T_NUMBER) {
         return std::make_shared<ValueNode>(tok.value);
     } else {
         throw std::runtime_error("Parser::parimary: Unexpected token type" + 
@@ -48,24 +48,24 @@ ExprType Parser::arithop(const Token &tok) {
     }
 }
 
-std::shared_ptr<ASTNode> Parser::parseBinaryExpressionWithPrecedence(int prev_precedence) {
-    std::shared_ptr<ASTNode> left = parimary();
-    if (current >= toks.size() || toks[current].type == T_RPAREN) {
+std::shared_ptr<ExprNode> Parser::parseBinaryExpressionWithPrecedence(int prev_precedence) {
+    std::shared_ptr<ExprNode> left = parimary();
+    if (current >= toks.size() || toks[current].type == T_RPAREN || toks[current].type == T_SEMI) {
         return left; // If no token is available, return the left node
     }
     while (precedence.at(arithop(toks[current])) > prev_precedence) {
         ExprType type = arithop(toks[current++]);
-        std::shared_ptr<ASTNode> right = parseBinaryExpressionWithPrecedence(precedence.at(type));
+        std::shared_ptr<ExprNode> right = parseBinaryExpressionWithPrecedence(precedence.at(type));
         left = std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
-        if (current >= toks.size() || toks[current].type == T_RPAREN) {
+        if (current >= toks.size() || toks[current].type == T_RPAREN || toks[current].type == T_SEMI) {
             return left; // If no token is available, return the left node
         }
     }
     return left;
 }
 
-std::shared_ptr<ASTNode> Parser::parseAdditiveExpression() {
-    std::shared_ptr<ASTNode> left = parseMultiplicativeExpression();
+std::shared_ptr<ExprNode> Parser::parseAdditiveExpression() {
+    std::shared_ptr<ExprNode> left = parseMultiplicativeExpression();
     while (current < toks.size()) {
         if (toks[current].type != T_PLUS && toks[current].type != T_MINUS) {
             throw std::runtime_error("Parser::parseAdditiveExpression: Expected '+' or '-' operator at line " + 
@@ -73,20 +73,43 @@ std::shared_ptr<ASTNode> Parser::parseAdditiveExpression() {
                 std::to_string(toks[current].column_no));
         }
         ExprType type = arithop(toks[current++]);
-        std::shared_ptr<ASTNode> right = parseMultiplicativeExpression();
+        std::shared_ptr<ExprNode> right = parseMultiplicativeExpression();
         left = std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
     }
     
     return left;
 }
 
-std::shared_ptr<ASTNode> Parser::parseMultiplicativeExpression() {
-    std::shared_ptr<ASTNode> left = parimary();
+std::shared_ptr<ExprNode> Parser::parseMultiplicativeExpression() {
+    std::shared_ptr<ExprNode> left = parimary();
     while (current < toks.size() && (toks[current].type == T_STAR || toks[current].type == T_SLASH)) {
         ExprType type = arithop(toks[current++]);
-        std::shared_ptr<ASTNode> right = parimary();
+        std::shared_ptr<ExprNode> right = parimary();
         left = std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
     }
     
     return left;
+}
+
+std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() { 
+    assert(toks[current++].type == T_PRINT);
+    std::shared_ptr<ExprNode> expr = parseBinaryExpressionWithPrecedence(0);
+    assert(toks[current++].type == T_SEMI);
+    return std::make_shared<PrintStatementNode>(std::move(expr));
+}
+
+std::shared_ptr<StatementsNode> Parser::parseStatements() { 
+    std::shared_ptr<StatementsNode> stmts = std::make_shared<StatementsNode>();
+    while (current < toks.size()) {
+        std::shared_ptr<StatementNode> stmt;
+        if (toks[current].type == T_PRINT) {
+            std::shared_ptr<StatementNode> stmt = parsePrintStatement();
+            stmts->addStatement(stmt);
+        } else {
+            throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
+                std::to_string(toks[current].line_no) + ", column " + 
+                std::to_string(toks[current].column_no));
+        }
+    }
+    return stmts;
 }

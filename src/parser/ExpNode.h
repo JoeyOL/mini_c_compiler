@@ -8,8 +8,8 @@ class BinaryExpNode : public ExprNode {
     public:
         BinaryExpNode(ExprType type, std::shared_ptr<ASTNode> left, std::shared_ptr<ASTNode> right)
             : type(type), left(std::move(left)), right(std::move(right)) {
-                if (this->left->getType() == T_FLOATLIT || 
-                    this->right->getType() == T_FLOATLIT) {
+                if (this->left->getType() == P_FLOAT || 
+                    this->right->getType() == P_FLOAT) {
                     value.setFloatValue(0.0); // Initialize to float if any operand is float
                 } else {
                     value.setIntValue(0); // Initialize to int otherwise
@@ -52,8 +52,8 @@ class BinaryExpNode : public ExprNode {
                     value = left->getValue() * right->getValue();
                     break;
                 case A_DIVIDE:
-                    if (right->getValue() == Value{T_INTLIT, .ivalue = 0} 
-                        || right->getValue() == Value{T_FLOATLIT, .fvalue = 0.0}) {
+                    if (right->getValue() == Value{P_INT, .ivalue = 0} 
+                        || right->getValue() == Value{P_FLOAT, .fvalue = 0.0}) {
                         throw std::runtime_error("Division by zero error");
                     }
                     value = left->getValue() / right->getValue();
@@ -69,3 +69,43 @@ class BinaryExpNode : public ExprNode {
         std::shared_ptr<ASTNode> left;
         std::shared_ptr<ASTNode> right;
 };
+
+
+class UnaryExpNode : public ExprNode {
+    public:
+        UnaryExpNode(UnaryOp op, std::shared_ptr<ASTNode> expr): op(op), expr(std::move(expr)) {
+            if (this->expr->getType() == P_FLOAT) {
+                value.setFloatValue(0.0); // Initialize to float if the expression is float
+            } else {
+                value.setIntValue(0); // Initialize to int otherwise
+            }
+        }
+        UnaryOp getOp() const { return op; }
+        std::shared_ptr<ASTNode> getExpr() const { return expr; }
+        std::string convertTypeToString() const {
+            switch (op) {
+                case U_PLUS:
+                    return "Unary Plus Expression";
+                case U_MINUS:
+                    return "Unary Minus Expression";
+                default:
+                    return "Unknown Unary Type";
+            }
+        }
+        void walk() override {
+            // Implement the walk method to traverse the unary expression node
+            // This could involve visiting the operand, etc.
+            expr->walk();
+            if (op == U_MINUS) {
+                value = -expr->getValue(); // Negate the value for unary minus
+            } else {
+                value = expr->getValue(); // For unary plus, just return the value
+            }
+            std::cout << "Unary Expression: " << convertTypeToString() << "Result: " << value.toString() << std::endl;
+        }
+    private:
+        UnaryOp op;
+        std::shared_ptr<ASTNode> expr;
+};
+
+

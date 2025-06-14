@@ -11,6 +11,9 @@ class Scanner {
         ~Scanner() = default;
         bool scan(Token& token);
     private:
+        std::map<std::string, TokenType> keywords = {
+            {"print", T_PRINT},
+        };
         int line_no;
         int column_no;
         char putback_char;
@@ -22,4 +25,13 @@ class Scanner {
         int scanint(int c);
         char next();
         void scanNumeric(Token& token, char c);
+        void scanIdentifier(Token& token, char c);
+        bool matchKeyword(const std::string& iden, Token& token) {
+            auto it = keywords.find(iden);
+            if (it != keywords.end()) {
+                token.type = it->second;
+                return true; // Keyword matched
+            }
+            return false; // Not a keyword
+        }
 };

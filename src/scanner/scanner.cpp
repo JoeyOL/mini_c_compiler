@@ -50,11 +50,10 @@ void Scanner::scanNumeric(Token& token, char c) {
                                  + " at line " + std::to_string(line_no) 
                                  + ", column " + std::to_string(column_no));
     }
-
+    token.type = T_NUMBER;
     int integer_part = 0;
     if (c != '.') {
         integer_part = scanint(c);
-        token.type = T_INTLIT;
         token.value.setIntValue(integer_part);
         c = next();
     }
@@ -68,7 +67,6 @@ void Scanner::scanNumeric(Token& token, char c) {
         }
         double fractional_part = scanint(c);
         double value = integer_part + fractional_part / std::pow(10, std::to_string((int)fractional_part).length());
-        token.type = T_FLOATLIT;
         token.value.setFloatValue(value);
     } else if (c == 'e' || c == 'E') {
         // Handle scientific notation
@@ -91,7 +89,6 @@ void Scanner::scanNumeric(Token& token, char c) {
             exponent = -exponent;
         }
         double value = integer_part * std::pow(10, exponent);
-        token.type = T_FLOATLIT;
         token.value.setFloatValue(value);
     } else {
         putback(c);
@@ -104,6 +101,27 @@ Scanner::Scanner(const std::string& source_path)
     source_file.open(source_path, std::ios::in);
     if (!source_file.is_open()) {
         throw std::runtime_error("Could not open source file: " + source_path);
+    }
+}
+
+void Scanner::scanIdentifier(Token& token, char c) { 
+    // Handle identifiers or keywords
+    std::string identifier;
+    identifier += c;
+    c = next();
+    while (isalnum(c) || c == '_') {
+        identifier += c;
+        c = next();
+    }
+    if (identifier.size() >= MAX_IDENTIFIER_LENGTH) {
+        throw std::runtime_error("Identifier too long: " + identifier + 
+                                 " at line " + std::to_string(line_no) 
+                                 + ", column " + std::to_string(column_no));
+    }
+    putback(c);
+    if (!matchKeyword(identifier, token)) {
+        token.type = T_IDENTIFIER; // Assuming T_IDENTIFIER is defined in TokenType
+        token.value.setStringValue(identifier); // Assuming setStringValue is defined
     }
 }
 
@@ -129,7 +147,11 @@ bool Scanner::scan(Token& token) {
         token.type = T_LPAREN;
     } else if (c == ')') {
         token.type = T_RPAREN;
-    }else {
+    } else if (isalpha(c) || c == '_') {
+        scanIdentifier(token, c);
+    } else if (c == ';') {
+        token.type = T_SEMI;
+    } else {
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 
                                  + " at line " + std::to_string(line_no) 
                                  + ", column " + std::to_string(column_no));

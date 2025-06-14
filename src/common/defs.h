@@ -3,36 +3,52 @@
 #include <iostream>
 #pragma once
 
+const int MAX_IDENTIFIER_LENGTH = 1024; // Maximum length for identifiers
+
+
 enum TokenType {
-    T_PLUS, T_MINUS, T_STAR, T_SLASH, T_INTLIT, T_LPAREN, T_RPAREN, T_FLOATLIT
+    T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_IDENTIFIER, T_PRINT, T_SEMI, T_NUMBER
+};
+
+enum PrimitiveType {
+    P_INT, P_FLOAT, P_STRING, P_BOOL
+};
+
+enum StmtType {
+    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK
 };
 
 struct Value {
-    TokenType type;
+    PrimitiveType type;
     union {
         int ivalue; // For integer literals
         double fvalue; // For floating-point literals, if needed
     };
+    std::string strvalue; // For string literals, if needed
     void setIntValue(int value) {
         ivalue = value;
-        type = T_INTLIT;
+        type = P_INT;
     }
     void setFloatValue(double value) {
         fvalue = value;
-        type = T_FLOATLIT;
+        type = P_FLOAT;
+    }
+    void setStringValue(const std::string& value) {
+        strvalue = value;
+        type = P_STRING;
     }
     std::string toString() const {
-        if (type == T_INTLIT) {
+        if (type == P_INT) {
             return std::to_string(ivalue);
-        } else if (type == T_FLOATLIT) {
+        } else if (type == P_FLOAT) {
             return std::to_string(fvalue);
         }
         return "Unknown Value Type";
     }
     bool operator==(const Value& other) const {
         if (type != other.type) return false;
-        if (type == T_INTLIT) return ivalue == other.ivalue;
-        if (type == T_FLOATLIT) return fvalue == other.fvalue;
+        if (type == P_INT) return ivalue == other.ivalue;
+        if (type == P_FLOAT) return fvalue == other.fvalue;
         return false;
     }
 
@@ -41,62 +57,62 @@ struct Value {
     }
 
     Value operator+(const Value& other) const {
-        if (type == T_INTLIT && other.type == T_INTLIT) {
-            return Value{T_INTLIT, .ivalue = ivalue + other.ivalue};
-        } else if (type == T_FLOATLIT && other.type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = fvalue + other.fvalue};
-        } else if (type == T_INTLIT && other.type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = ivalue + other.fvalue};
-        } else if (type == T_FLOATLIT && other.type == T_INTLIT) {
-            return Value{T_FLOATLIT, .fvalue = fvalue + other.ivalue};
+        if (type == P_INT && other.type == P_INT) {
+            return Value{P_INT, .ivalue = ivalue + other.ivalue};
+        } else if (type == P_FLOAT && other.type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = fvalue + other.fvalue};
+        } else if (type == P_INT && other.type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = ivalue + other.fvalue};
+        } else if (type == P_FLOAT && other.type == P_INT) {
+            return Value{P_FLOAT, .fvalue = fvalue + other.ivalue};
         }
         throw std::runtime_error("Value::operator+: Incompatible types for addition");
     }
     Value operator-(const Value& other) const {
-        if (type == T_INTLIT && other.type == T_INTLIT) {
-            return Value{T_INTLIT, .ivalue = ivalue - other.ivalue};
-        } else if (type == T_FLOATLIT && other.type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = fvalue - other.fvalue};
-        } else if (type == T_INTLIT && other.type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = ivalue - other.fvalue};
-        } else if (type == T_FLOATLIT && other.type == T_INTLIT) {
-            return Value{T_FLOATLIT, .fvalue = fvalue - other.ivalue};
+        if (type == P_INT && other.type == P_INT) {
+            return Value{P_INT, .ivalue = ivalue - other.ivalue};
+        } else if (type == P_FLOAT && other.type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = fvalue - other.fvalue};
+        } else if (type == P_INT && other.type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = ivalue - other.fvalue};
+        } else if (type == P_FLOAT && other.type == P_INT) {
+            return Value{P_FLOAT, .fvalue = fvalue - other.ivalue};
         }
         throw std::runtime_error("Value::operator-: Incompatible types for subtraction");
     }
     Value operator*(const Value& other) const {
-        if (type == T_INTLIT && other.type == T_INTLIT) {
-            return Value{T_INTLIT, .ivalue = ivalue * other.ivalue};
-        } else if (type == T_FLOATLIT && other.type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = fvalue * other.fvalue};
-        } else if (type == T_INTLIT && other.type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = ivalue * other.fvalue};
-        } else if (type == T_FLOATLIT && other.type == T_INTLIT) {
-            return Value{T_FLOATLIT, .fvalue = fvalue * other.ivalue};
+        if (type == P_INT && other.type == P_INT) {
+            return Value{P_INT, .ivalue = ivalue * other.ivalue};
+        } else if (type == P_FLOAT && other.type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = fvalue * other.fvalue};
+        } else if (type == P_INT && other.type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = ivalue * other.fvalue};
+        } else if (type == P_FLOAT && other.type == P_INT) {
+            return Value{P_FLOAT, .fvalue = fvalue * other.ivalue};
         }
         throw std::runtime_error("Value::operator*: Incompatible types for multiplication");
     }
     Value operator/(const Value& other) const {
-        if (type == T_INTLIT && other.type == T_INTLIT) {
+        if (type == P_INT && other.type == P_INT) {
             if (other.ivalue == 0) throw std::runtime_error("Division by zero");
-            return Value{T_INTLIT, .ivalue = ivalue / other.ivalue};
-        } else if (type == T_FLOATLIT && other.type == T_FLOATLIT) {
+            return Value{P_INT, .ivalue = ivalue / other.ivalue};
+        } else if (type == P_FLOAT && other.type == P_FLOAT) {
             if (other.fvalue == 0.0) throw std::runtime_error("Division by zero");
-            return Value{T_FLOATLIT, .fvalue = fvalue / other.fvalue};
-        } else if (type == T_INTLIT && other.type == T_FLOATLIT) {
+            return Value{P_FLOAT, .fvalue = fvalue / other.fvalue};
+        } else if (type == P_INT && other.type == P_FLOAT) {
             if (other.fvalue == 0.0) throw std::runtime_error("Division by zero");
-            return Value{T_FLOATLIT, .fvalue = ivalue / other.fvalue};
-        } else if (type == T_FLOATLIT && other.type == T_INTLIT) {
+            return Value{P_FLOAT, .fvalue = ivalue / other.fvalue};
+        } else if (type == P_FLOAT && other.type == P_INT) {
             if (other.ivalue == 0) throw std::runtime_error("Division by zero");
-            return Value{T_FLOATLIT, .fvalue = fvalue / other.ivalue};
+            return Value{P_FLOAT, .fvalue = fvalue / other.ivalue};
         }
         throw std::runtime_error("Value::operator/: Incompatible types for division");
     }
     Value operator-() const {
-        if (type == T_INTLIT) {
-            return Value{T_INTLIT, .ivalue = -ivalue};
-        } else if (type == T_FLOATLIT) {
-            return Value{T_FLOATLIT, .fvalue = -fvalue};
+        if (type == P_INT) {
+            return Value{P_INT, .ivalue = -ivalue};
+        } else if (type == P_FLOAT) {
+            return Value{P_FLOAT, .fvalue = -fvalue};
         }
         throw std::runtime_error("Value::operator-: Unknown value type for unary minus");
     }
@@ -122,8 +138,10 @@ class ASTNode {
         ASTNode() = default;
         ~ASTNode() = default;
         virtual void walk() = 0; // Pure virtual function for walking the AST
-        virtual Value getValue() = 0;
-        TokenType getType() const {
+        virtual Value getValue() {
+            throw std::runtime_error("ASTNode::getValue: Not implemented for this node type");
+        };
+        PrimitiveType getType() const {
             return value.type; // Return the type of the value
         }
     protected:
@@ -141,30 +159,38 @@ class ExprNode: public ASTNode {
         }
 };
 
+class StatementNode : public ASTNode {
+    public:
+        StatementNode() = default;
+        ~StatementNode() = default;
+    protected:
+        StmtType type; // Type of the statement
+};
+
 class ValueNode : public ExprNode{
     public:
         ValueNode(Value value) {this->value = value;}
         ~ValueNode() = default;
         void walk() override {
             // Implement the walk method to print the value
-            if (value.type == T_INTLIT) {
+            if (value.type == P_INT) {
                 std::cout << "Integer Literal: " << value.ivalue << std::endl;
-            } else if (value.type == T_FLOATLIT) {
+            } else if (value.type == P_FLOAT) {
                 std::cout << "Floating Point Literal: " << value.fvalue << std::endl;
             }
         }
         int getIntValue() const {
-            if (value.type == T_INTLIT) {
+            if (value.type == P_INT) {
                 return value.ivalue;
-            } else if (value.type == T_FLOATLIT) {
+            } else if (value.type == P_FLOAT) {
                 return static_cast<int>(value.fvalue); // Convert float to int for simplicity
             }
             throw std::runtime_error("ValueNode::getValue: Unknown value type");
         }
         double getFloatValue() const {
-            if (value.type == T_FLOATLIT) {
+            if (value.type == P_FLOAT) {
                 return value.fvalue;
-            } else if (value.type == T_INTLIT) {
+            } else if (value.type == P_INT) {
                 return static_cast<double>(value.ivalue); // Convert int to float for simplicity
             }
             throw std::runtime_error("ValueNode::getValue: Unknown value type");

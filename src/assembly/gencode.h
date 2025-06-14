@@ -71,7 +71,7 @@ class GenCode {
         int cgload(Value value) {
             // Load the value into a register and return the register index
             int reg = regManager->allocateRegister();
-            if (value.type == T_INTLIT) {
+            if (value.type == P_INT) {
                 outputFile << "\tmovq\t$" << value.ivalue << ", " << regManager->getRegister(reg) << "\n";
             } else {
                 throw std::runtime_error("GenCode::cgload: Only Support int value type for loading into register");
@@ -98,7 +98,7 @@ class GenCode {
             outputFile << "\tnegq\t" << regManager->getRegister(reg) << "\n";
             return reg; // Return the register containing the negated value
         }
-        
+
         int cgmul(int reg1, int reg2) {
             // Multiply the value in reg1 by the value in reg2 and return the result in reg1
             outputFile << "\timulq\t" << regManager->getRegister(reg1) << ", " << regManager->getRegister(reg2) << "\n";
