@@ -25,6 +25,7 @@ class Scanner {
         void putback(char c);
         int scanint(int c);
         char next();
+        char peek();
         void scanNumeric(Token& token, char c);
         void scanIdentifier(Token& token, char c);
         bool matchKeyword(const std::string& iden, Token& token) {

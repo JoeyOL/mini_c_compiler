@@ -11,7 +11,8 @@ const int MAX_IDENTIFIER_LENGTH = 1024; // Maximum length for identifiers
 
 enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_IDENTIFIER, T_PRINT, 
-    T_SEMI, T_NUMBER, T_INT, T_EQUALS, T_COMMA
+    T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA,
+    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT
 };
 
 enum PrimitiveType {
@@ -20,6 +21,15 @@ enum PrimitiveType {
 
 enum StmtType {
     S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF
+};
+
+enum ExprType {
+    A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
+    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE
+};
+
+enum UnaryOp {
+    U_PLUS, U_MINUS, U_NOT
 };
 
 struct Symbol {
@@ -162,13 +172,6 @@ struct Token {
     int column_no; // Column number in the source file
 };
 
-enum ExprType {
-    A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE
-};
-
-enum UnaryOp {
-    U_PLUS, U_MINUS
-};
 
 class ASTNode {
     public:
@@ -182,6 +185,9 @@ class ASTNode {
             return value.type; // Return the type of the value
         }
         static std::string prettyPrint(std::string prefix) {
+            if (prefix.empty()) {
+                return "";
+            }
             return prefix + "|--> ";
         }
     protected:
@@ -210,7 +216,7 @@ class StatementNode : public ASTNode {
         StmtType type; // Type of the statement
 };
 
-class ValueNode : public ExprNode{
+class ValueNode : public ExprNode {
     public:
         ValueNode(Value value) {this->value = value;}
         ~ValueNode() = default;
@@ -243,8 +249,14 @@ class ValueNode : public ExprNode{
 
 
 static const std::map<ExprType, int> precedence = {
-    {A_ADD, 1},
-    {A_SUBTRACT, 1},
-    {A_MULTIPLY, 2},
-    {A_DIVIDE, 2},
+    {A_ADD, 15},
+    {A_SUBTRACT, 15},
+    {A_MULTIPLY, 20},
+    {A_DIVIDE, 20},
+    {A_EQ, 5},
+    {A_NE, 5},
+    {A_LT, 10},
+    {A_GT, 10},
+    {A_LE, 10},
+    {A_GE, 10}
 };

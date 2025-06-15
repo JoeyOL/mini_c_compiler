@@ -85,6 +85,15 @@ private:
     size_t current = 0;
     std::shared_ptr<ExprNode> parimary();
     ExprType arithop(const Token &tok);
+    Token consume() {
+        return toks[current++];
+    }
+    Token peek() const {
+        if (current < toks.size()) {
+            return toks[current];
+        }
+        return Token{T_EOF, Value{}, -1, -1}; // Return EOF token if out of bounds
+    }
     // Additional private methods for parsing would go here.
     // For example, methods to parse terms, factors, etc.
 };

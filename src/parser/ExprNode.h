@@ -10,7 +10,7 @@ class BinaryExpNode : public ExprNode {
             : type(type), left(std::move(left)), right(std::move(right)) {
                 if (this->left->getType() == P_FLOAT || 
                     this->right->getType() == P_FLOAT) {
-                    value.setFloatValue(0.0); // Initialize to float if any operand is float
+                    value.setFloatValue(0.0); // Initialize to float  if any operand is float
                 } else {
                     value.setIntValue(0); // Initialize to int otherwise
                 }
@@ -25,6 +25,12 @@ class BinaryExpNode : public ExprNode {
                 {A_SUBTRACT, "Subtraction"},
                 {A_MULTIPLY, "Multiplication"},
                 {A_DIVIDE, "Division"},
+                {A_EQ, "Equality"},
+                {A_NE, "Inequality"},
+                {A_LT, "Less Than"},
+                {A_LE, "Less Than or Equal"},
+                {A_GT, "Greater Than"},
+                {A_GE, "Greater Than or Equal"}
             };
             auto it = typeToString.find(type);
             if (it != typeToString.end()) {
@@ -71,12 +77,18 @@ class BinaryExpNode : public ExprNode {
 
 class UnaryExpNode : public ExprNode {
     public:
-        UnaryExpNode(UnaryOp op, std::shared_ptr<ASTNode> expr): op(op), expr(std::move(expr)) {
-            if (this->expr->getType() == P_FLOAT) {
-                value.setFloatValue(0.0); // Initialize to float if the expression is float
+        UnaryExpNode(UnaryOp op, std::shared_ptr<ASTNode> expr): op(op), expr(std::move(expr)) {}
+        UnaryExpNode(TokenType tok, std::shared_ptr<ASTNode> expr) {
+            if (tok == T_PLUS) {
+                op = U_PLUS;
+            } else if (tok == T_MINUS) {
+                op = U_MINUS;
+            } else if (tok == T_NOT) {
+                op = U_NOT;
             } else {
-                value.setIntValue(0); // Initialize to int otherwise
+                throw std::runtime_error("UnaryExpNode: Unknown token type for unary operation");
             }
+            this->expr = std::move(expr);
         }
         UnaryOp getOp() const { return op; }
         std::shared_ptr<ASTNode> getExpr() const { return expr; }
@@ -86,6 +98,8 @@ class UnaryExpNode : public ExprNode {
                     return "Plus";
                 case U_MINUS:
                     return "Minus";
+                case U_NOT:
+                    return "Not";
                 default:
                     return "Unknown Unary Type";
             }

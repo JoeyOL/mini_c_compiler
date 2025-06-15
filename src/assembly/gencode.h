@@ -47,8 +47,16 @@ class RegisterManager {
             return registers[reg];
         }
 
+        std::string getRegisterLower8bit(int reg) const {
+            if (reg < 0 || reg >= registers.size()) {
+                throw std::out_of_range("Register index out of range");
+            }
+            return registers_lower8bit[reg];
+        }
+
     private:
         const std::vector<std::string> registers = { "%r8", "%r9", "%r10", "%r11" };
+        const std::vector<std::string> registers_lower8bit = { "%r8b", "%r9b", "%r10b", "%r11b" };
         std::vector<bool> allocated; // Track allocated registers
 };
 
@@ -178,5 +186,46 @@ class GenCode {
         void freereg(int reg) {
             regManager->freeRegister(reg); // Free the specified register
         }
+
+        int cgcompare(int r1, int r2, const char *op) {
+            outputFile <<
+                "\tcmpq\t" << regManager->getRegister(r2) << "," << regManager->getRegister(r1) << "\n"
+                "\t" << op << "\t" << regManager->getRegisterLower8bit(r2) << "\n"
+                "\tandq\t$255," << regManager->getRegister(r2) << "\n"; 
+            regManager->freeRegister(r1);
+            return r2;
+        }
+
+        int cgequal(int r1, int r2) {
+            return cgcompare(r1, r2, "sete");
+        }
+
+        int cgnotequal(int r1, int r2) {
+            return cgcompare(r1, r2, "setne");
+        }
+
+        int cggreaterthan(int r1, int r2) {
+            return cgcompare(r1, r2, "setg");
+        }
+
+        int cglessthan(int r1, int r2) {
+            return cgcompare(r1, r2, "setl");
+        }
+
+        int cggreaterequal(int r1, int r2) {
+            return cgcompare(r1, r2, "setge");
+        }
+
+        int cglessequal(int r1, int r2) {
+            return cgcompare(r1, r2, "setle");
+        }
+
+        int cgnot(int r1) {
+            int r2 = cgload(Value{ .type = P_INT, .ivalue = 0}); // Allocate a new register for the result
+            return cgcompare(r1, r2, "sete");
+        }
+
         int walkAST(const std::shared_ptr<ASTNode>& ast);
+        int walkStatement(const std::shared_ptr<StatementNode>& ast);
+        int walkExpr(const std::shared_ptr<ExprNode>& ast);
 };

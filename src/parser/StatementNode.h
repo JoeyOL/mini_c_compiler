@@ -10,7 +10,7 @@ class StatementsNode : public StatementNode {
         StatementsNode() = default;
         ~StatementsNode() = default;
         void walk(std::string prefix) override {
-            std::cout << prefix << "Statements node :" << std::endl;
+            std::cout << prettyPrint(prefix) << "Statements node :" << std::endl;
             for (const auto& stmt : statements) {
                 stmt->walk(prefix + "\t"); // Walk each statement
             }
@@ -99,7 +99,7 @@ class AssignmentNode : public StatementNode {
             type = S_ASSIGN; // Set the statement type to assignment
         }
         void walk(std::string prefix) override {
-            std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = ";
+            std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = " << std::endl;
             expression->walk(prefix + "\t"); // Walk the expression node
         }
         Value getValue() override {

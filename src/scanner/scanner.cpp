@@ -34,6 +34,12 @@ char Scanner::next() {
     return c;
 }
 
+char Scanner::peek() {
+    char c = next();
+    putback(c);
+    return c;
+}
+
 int Scanner::scanint(int c) {
     int value = 0;
     while (c >= '0' && c <= '9') {
@@ -152,10 +158,33 @@ bool Scanner::scan(Token& token) {
     } else if (c == ';') {
         token.type = T_SEMI;
     } else if (c == '=') { 
-        token.type = T_EQUALS;
+        if (peek() == '=') {
+            next();
+            token.type = T_EQ;
+        }
+        else token.type = T_ASSIGN;
     } else if (c == ',') {
         token.type = T_COMMA;
+    } else if (c == '<') {
+        if (peek() == '=') {
+            next();
+            token.type = T_LE;
+        }
+        else token.type = T_LT;
+    } else if (c == '>') {
+        if (peek() == '=') {
+            next();
+            token.type = T_GE;
+        }
+        else token.type = T_GT;
+    } else if (c == '!') {
+        if (peek() == '=') {
+            next();
+            token.type = T_NE;
+        }
+        else token.type = T_NOT;
     } else {
+Error:
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 
                                  + " at line " + std::to_string(line_no) 
                                  + ", column " + std::to_string(column_no));
