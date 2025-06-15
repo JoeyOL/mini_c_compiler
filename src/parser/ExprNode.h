@@ -33,35 +33,33 @@ class BinaryExpNode : public ExprNode {
                 return "Unknown Type";
             }
         }
-        void walk() override {
+        void walk(std::string prefix) override {
             // Implement the walk method to traverse the binary expression node
             // This could involve visiting the left and right nodes, etc.
-            left->walk();
-            right->walk();
-            std::cout << "Binary Expression: " << convertTypeToString();
-            std::cout << " (Left: " << (left->getValue().toString()) 
-                      << ", Right: " << (right->getValue().toString()) << ")";
-            switch (type) {
-                case A_ADD:
-                    value = left->getValue() + right->getValue();
-                    break;
-                case A_SUBTRACT:
-                    value = left->getValue() - right->getValue();
-                    break;
-                case A_MULTIPLY:
-                    value = left->getValue() * right->getValue();
-                    break;
-                case A_DIVIDE:
-                    if (right->getValue() == Value{P_INT, .ivalue = 0} 
-                        || right->getValue() == Value{P_FLOAT, .fvalue = 0.0}) {
-                        throw std::runtime_error("Division by zero error");
-                    }
-                    value = left->getValue() / right->getValue();
-                    break;
-                default:
-                    throw std::runtime_error("Unknown binary expression type");
-            }
-            std::cout << " Result: " << value.toString() << std::endl;
+            std::cout << prettyPrint(prefix) << "Binary Expr, Op "<< convertTypeToString() <<" :" << std::endl;
+            left->walk(prefix + "\t");
+            right->walk(prefix + "\t");
+            // switch (type) {
+            //     case A_ADD:
+            //         value = left->getValue() + right->getValue();
+            //         break;
+            //     case A_SUBTRACT:
+            //         value = left->getValue() - right->getValue();
+            //         break;
+            //     case A_MULTIPLY:
+            //         value = left->getValue() * right->getValue();
+            //         break;
+            //     case A_DIVIDE:
+            //         if (right->getValue() == Value{P_INT, .ivalue = 0} 
+            //             || right->getValue() == Value{P_FLOAT, .fvalue = 0.0}) {
+            //             throw std::runtime_error("Division by zero error");
+            //         }
+            //         value = left->getValue() / right->getValue();
+            //         break;
+            //     default:
+            //         throw std::runtime_error("Unknown binary expression type");
+            // }
+            // std::cout << " Result: " << value.toString() << std::endl;
         }
 
     private:
@@ -85,27 +83,37 @@ class UnaryExpNode : public ExprNode {
         std::string convertTypeToString() const {
             switch (op) {
                 case U_PLUS:
-                    return "Unary Plus Expression";
+                    return "Plus";
                 case U_MINUS:
-                    return "Unary Minus Expression";
+                    return "Minus";
                 default:
                     return "Unknown Unary Type";
             }
         }
-        void walk() override {
+        void walk(std::string prefix) override {
             // Implement the walk method to traverse the unary expression node
             // This could involve visiting the operand, etc.
-            expr->walk();
-            if (op == U_MINUS) {
-                value = -expr->getValue(); // Negate the value for unary minus
-            } else {
-                value = expr->getValue(); // For unary plus, just return the value
-            }
-            std::cout << "Unary Expression: " << convertTypeToString() << "Result: " << value.toString() << std::endl;
+            std::cout << prettyPrint(prefix) << "Unary Expr, Op " << convertTypeToString() << " :" << std::endl;
+            expr->walk(prefix + "\t");
+            // if (op == U_MINUS) {
+            //     value = -expr->getValue(); // Negate the value for unary minus
+            // } else {
+            //     value = expr->getValue(); // For unary plus, just return the value
+            // }
         }
     private:
         UnaryOp op;
         std::shared_ptr<ASTNode> expr;
 };
 
-
+class LValueNode : public ExprNode {
+    public:
+        LValueNode(Symbol identifier) : identifier(std::move(identifier)) {}
+        Symbol getIdentifier() const { return identifier; }
+        void walk(std::string prefix) override {
+            // Implement the walk method to print the identifier
+            std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier.name << std::endl;
+        }
+    private:
+        Symbol identifier;
+};

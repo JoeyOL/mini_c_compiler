@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
         std::shared_ptr<ASTNode> ast = parser.parseStatements();
         // std::shared_ptr<ASTNode> ast = parser.parseAdditiveExpression();
         std::cout << "Parsed AST successfully." << std::endl;
-        ast->walk(); // Walk the AST to print the structure and values
+        ast->walk(""); // Walk the AST to print the structure and values
         std::cout << "AST walk completed." << std::endl;
 
         // Code generation would go here, e.g., generating assembly code from the AST

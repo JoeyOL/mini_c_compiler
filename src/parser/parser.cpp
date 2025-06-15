@@ -26,6 +26,9 @@ std::shared_ptr<ExprNode> Parser::parimary() {
         return ret;
     } else if (tok.type == T_NUMBER) {
         return std::make_shared<ValueNode>(tok.value);
+    } else if (tok.type == T_IDENTIFIER) {
+        Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
+        return std::make_shared<LValueNode>(sym);
     } else {
         throw std::runtime_error("Parser::parimary: Unexpected token type" + 
             std::to_string(tok.type) + " at line " + 
@@ -101,10 +104,15 @@ std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() {
 std::shared_ptr<StatementsNode> Parser::parseStatements() { 
     std::shared_ptr<StatementsNode> stmts = std::make_shared<StatementsNode>();
     while (current < toks.size()) {
-        std::shared_ptr<StatementNode> stmt;
         if (toks[current].type == T_PRINT) {
             std::shared_ptr<StatementNode> stmt = parsePrintStatement();
             stmts->addStatement(stmt);
+        } else if (toks[current].type == T_INT) {
+            std::shared_ptr<VariableDeclareNode> var_decl = parseVariableDeclare();
+            stmts->addStatement(var_decl);
+        } else if (toks[current].type == T_IDENTIFIER) {
+            std::shared_ptr<AssignmentNode> assign_stmt = parseAssignment();
+            stmts->addStatement(assign_stmt);
         } else {
             throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
                 std::to_string(toks[current].line_no) + ", column " + 
@@ -112,4 +120,43 @@ std::shared_ptr<StatementsNode> Parser::parseStatements() {
         }
     }
     return stmts;
+}
+
+std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
+    auto var_decl = std::make_shared<VariableDeclareNode>(PrimitiveType::P_INT);
+    assert(toks[current++].type == T_INT);
+    do {
+        if (current >= toks.size() || toks[current].type != T_IDENTIFIER) {
+            throw std::runtime_error("Parser::parseVariableDeclare: Expected identifier at line " + 
+                std::to_string(toks[current].line_no) + ", column " + 
+                std::to_string(toks[current].column_no));
+        }
+        std::string var_name = toks[current++].value.strvalue;
+        if (toks[current++].type == T_EQUALS) {
+            std::shared_ptr<ExprNode> initializer = parseBinaryExpressionWithPrecedence(0);
+            var_decl->addIdentifier(var_name, std::move(initializer));
+        } else {
+            current--;
+            var_decl->addIdentifier(var_name);
+        }
+        symbol_table.addSymbol(var_name, P_INT); // Assuming all variables are of type int for simplicity
+    } while (current < toks.size() && toks[current++].type == T_COMMA);
+    current--;
+    assert(toks[current++].type == T_SEMI);
+    return var_decl;
+}
+
+std::shared_ptr<AssignmentNode> Parser::parseAssignment() { 
+    assert(toks[current].type == T_IDENTIFIER);
+    std::string identifier = toks[current++].value.strvalue;
+    if (current >= toks.size() || toks[current].type != T_EQUALS) {
+        throw std::runtime_error("Parser::parseAssignment: Expected '=' after identifier at line " + 
+            std::to_string(toks[current].line_no) + ", column " + 
+            std::to_string(toks[current].column_no));
+    }
+    Symbol sym = symbol_table.getSymbol(identifier); // Check if the identifier exists in the symbol table
+    current++; // Skip the '=' token
+    std::shared_ptr<ExprNode> expr = parseBinaryExpressionWithPrecedence(0);
+    assert(toks[current++].type == T_SEMI);
+    return std::shared_ptr<AssignmentNode>(new AssignmentNode(sym, std::move(expr)));
 }

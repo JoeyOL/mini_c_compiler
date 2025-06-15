@@ -13,6 +13,7 @@ class Scanner {
     private:
         std::map<std::string, TokenType> keywords = {
             {"print", T_PRINT},
+            {"int", T_INT},
         };
         int line_no;
         int column_no;

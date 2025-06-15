@@ -156,5 +156,27 @@ class GenCode {
             regManager->freeAllRegister(); // Free all registers at the end
         }
 
+        int cgloadglob(const char *identifier) {
+            // Load the value of the global variable into a register
+            int reg = regManager->allocateRegister();
+            outputFile <<
+                "\tmovq\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n";
+            return reg; // Return the register containing the loaded value
+        }
+
+        int cgstorglob(int r, const char *identifier) {
+            outputFile <<
+                "\tmovq\t" << regManager->getRegister(r) << ", " << identifier << "(%rip)\n";
+            return r;
+        }
+
+        void cgglobsym(const char *sym) {
+            outputFile <<
+                "\t.comm\t" << sym << ",8,8\n"; // Declare a global symbol
+        }
+
+        void freereg(int reg) {
+            regManager->freeRegister(reg); // Free the specified register
+        }
         int walkAST(const std::shared_ptr<ASTNode>& ast);
 };

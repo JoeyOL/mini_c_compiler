@@ -1,13 +1,17 @@
 #include <map>
 #include <string>
 #include <iostream>
+#include <vector>
+#include <string>
+
 #pragma once
 
 const int MAX_IDENTIFIER_LENGTH = 1024; // Maximum length for identifiers
 
 
 enum TokenType {
-    T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_IDENTIFIER, T_PRINT, T_SEMI, T_NUMBER
+    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_IDENTIFIER, T_PRINT, 
+    T_SEMI, T_NUMBER, T_INT, T_EQUALS, T_COMMA
 };
 
 enum PrimitiveType {
@@ -15,8 +19,41 @@ enum PrimitiveType {
 };
 
 enum StmtType {
-    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK
+    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF
 };
+
+struct Symbol {
+    std::string name;
+    PrimitiveType type;
+    bool operator==(const std::string& other_name) const {
+        return name == other_name;
+    }
+};
+
+struct SymbolTable {
+    std::vector<Symbol> symbols;
+
+    // TODO: 作用域
+    void addSymbol(std::string name, PrimitiveType type) {
+        for (const auto& symbol : symbols) {
+            if (symbol.name == name) {
+                throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
+            }
+        }
+        symbols.push_back({name, type});
+    }
+
+    Symbol getSymbol(std::string name) {
+        for (const auto& symbol : symbols) {
+            if (symbol.name == name) {
+                return symbol; // Return the found symbol
+            }
+        }
+        throw std::runtime_error("SymbolTable::getSymbol: Symbol not found: " + name);
+    }
+};
+
+static SymbolTable symbol_table;
 
 struct Value {
     PrimitiveType type;
@@ -119,7 +156,7 @@ struct Value {
 };
 
 struct Token {
-    int type;
+    TokenType type;
     Value value; // Value of the token, if applicable
     int line_no; // Line number in the source file
     int column_no; // Column number in the source file
@@ -137,12 +174,15 @@ class ASTNode {
     public:
         ASTNode() = default;
         ~ASTNode() = default;
-        virtual void walk() = 0; // Pure virtual function for walking the AST
+        virtual void walk(std::string prefix) = 0; // Pure virtual function for walking the AST
         virtual Value getValue() {
             throw std::runtime_error("ASTNode::getValue: Not implemented for this node type");
         };
         PrimitiveType getType() const {
             return value.type; // Return the type of the value
+        }
+        static std::string prettyPrint(std::string prefix) {
+            return prefix + "|--> ";
         }
     protected:
         Value value; 
@@ -163,6 +203,9 @@ class StatementNode : public ASTNode {
     public:
         StatementNode() = default;
         ~StatementNode() = default;
+        StmtType getStmtType() const {
+            return type; // Return the type of the statement
+        }
     protected:
         StmtType type; // Type of the statement
 };
@@ -171,12 +214,12 @@ class ValueNode : public ExprNode{
     public:
         ValueNode(Value value) {this->value = value;}
         ~ValueNode() = default;
-        void walk() override {
+        void walk(std::string prefix) override {
             // Implement the walk method to print the value
             if (value.type == P_INT) {
-                std::cout << "Integer Literal: " << value.ivalue << std::endl;
+                std::cout << prettyPrint(prefix) << "Integer Literal: " << value.ivalue << std::endl;
             } else if (value.type == P_FLOAT) {
-                std::cout << "Floating Point Literal: " << value.fvalue << std::endl;
+                std::cout << prettyPrint(prefix) << "Float Literal: " << value.fvalue << std::endl;
             }
         }
         int getIntValue() const {
@@ -195,8 +238,6 @@ class ValueNode : public ExprNode{
             }
             throw std::runtime_error("ValueNode::getValue: Unknown value type");
         }
-
-
 };
 
 

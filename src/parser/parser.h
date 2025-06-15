@@ -1,5 +1,5 @@
 #include "common/defs.h"
-#include "parser/ExpNode.h"
+#include "parser/ExprNode.h"
 #include "parser/StatementNode.h"
 #include "scanner/scanner.h"
 #include <memory>
@@ -61,6 +61,24 @@ public:
      */
     std::shared_ptr<StatementsNode> parseStatements();
     std::shared_ptr<PrintStatementNode> parsePrintStatement();
+
+    // 有关变量
+    /*
+    statements: statement
+        |      statement statements
+        ;
+
+    statement: 'print' expression ';'
+        |     'int'   identifier ';'
+        |     identifier '=' expression ';'
+        ;
+
+    identifier: T_IDENT
+        ;
+    */
+
+    std::shared_ptr<VariableDeclareNode> parseVariableDeclare();
+    std::shared_ptr<AssignmentNode> parseAssignment();
 
 private:
     std::vector<Token> &toks;

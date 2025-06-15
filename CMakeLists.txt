@@ -12,8 +12,8 @@ add_executable(scanner
     src/main.cpp
     src/scanner/scanner.cpp
     src/parser/parser.cpp
-    src/parser/BinaryExpNode.h
-    src/parser/UnaryExpNode.h
+    src/parser/ExprNode.h
+    src/parser/StatementNode.h
     src/parser/parser.h
     src/assembly/gencode.cpp
     src/assembly/gencode.h

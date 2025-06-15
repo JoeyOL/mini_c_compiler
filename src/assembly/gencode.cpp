@@ -26,15 +26,35 @@ int GenCode::walkAST(const std::shared_ptr<ASTNode>& ast) {
     } else if (auto x = std::dynamic_pointer_cast<ValueNode>(ast)) {
         // Handle value node
         return cgload(x->getValue()); // Load the value into a register
+    } else if (auto x = std::dynamic_pointer_cast<LValueNode>(ast)) {
+        return cgloadglob(x->getIdentifier().name.c_str()); // Load the global variable into a register
     } else if (auto x = std::dynamic_pointer_cast<StatementsNode>(ast)) {
         for (const auto& stmt : x->getStatements()) {
-            walkAST(stmt); // Walk each statement in the statements node
+            int reg = walkAST(stmt); // Walk each statement in the statements node
+            if (stmt->getStmtType() == S_ASSIGN) {
+                freereg(reg);
+            }
         }
         return 0;
     } else if (auto x  = std::dynamic_pointer_cast<PrintStatementNode>(ast)) {
         int reg = walkAST(x->getExpression());
         cgprintint(reg);
         return 0;
+    } else if (auto x = std::dynamic_pointer_cast<VariableDeclareNode>(ast)) {
+        for (const auto& identifier: x->getIdentifiers()) {
+            cgglobsym(identifier.c_str());
+            auto initializer = x->getInitializer(identifier);
+            if (initializer != nullptr) {
+                int reg = walkAST(initializer);
+                cgstorglob(reg, identifier.c_str());
+                regManager->freeRegister(reg);
+            }
+        }
+        return 0;
+    } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(ast)) {
+        int reg = walkAST(x->getExpr());
+        cgstorglob(reg, x->getIdentifier().name.c_str());
+        return reg;
     } else {
         throw std::runtime_error("GenCode::generate: Unknown AST node type");
     }

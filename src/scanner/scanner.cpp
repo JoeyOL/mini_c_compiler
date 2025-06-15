@@ -129,7 +129,7 @@ bool Scanner::scan(Token& token) {
     skip();
     char c = next();
     if (c == 0) {
-        token.type = -1; // EOF
+        token.type = T_EOF; // EOF
         return false;
     }
     
@@ -151,6 +151,10 @@ bool Scanner::scan(Token& token) {
         scanIdentifier(token, c);
     } else if (c == ';') {
         token.type = T_SEMI;
+    } else if (c == '=') { 
+        token.type = T_EQUALS;
+    } else if (c == ',') {
+        token.type = T_COMMA;
     } else {
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 
                                  + " at line " + std::to_string(line_no) 
