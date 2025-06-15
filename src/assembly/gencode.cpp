@@ -41,8 +41,35 @@ int GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
     }
 }
 
+void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string false_label) {
+    if (auto x = std::dynamic_pointer_cast<BinaryExpNode>(ast)) {
+        int reg1 = walkAST(x->getLeft()); // Walk the left expression
+        int reg2 = walkAST(x->getRight()); // Walk the right expression
+        switch (x->getType()) {
+            case A_EQ: return cgnotequaljump(reg1, reg2, false_label.c_str());
+            case A_NE: return cgequaljump(reg1, reg2, false_label.c_str());
+            case A_LT: return cggreaterequaljump(reg1, reg2, false_label.c_str());
+            case A_LE: return cggreaterthanjump(reg1, reg2, false_label.c_str());
+            case A_GT: return cglessequaljump(reg1, reg2, false_label.c_str());
+            case A_GE: return cglessthanjump(reg1, reg2, false_label.c_str());
+            case A_ADD: reg1 = cgadd(reg1, reg2); break;// Add the two registers and return the result
+            case A_SUBTRACT: reg1 = cgsub(reg1, reg2); break;// Subtract the two registers and return the result
+            case A_MULTIPLY: reg1 = cgmul(reg1, reg2); break;// Multiply the two registers and return the result
+            case A_DIVIDE: reg1 = cgdiv(reg1, reg2); break;// Divide the two registers and return the result
+        }
+        reg2 = cgload(Value{ .type = P_INT, .ivalue = 0 }); // Load zero into a register
+        return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
+    } else {
+        int reg1 = walkExpr(ast); // Walk the expression in the condition
+        int reg2 = cgload(Value{ .type = P_INT, .ivalue = 0 }); // Load zero into a register
+        return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
+    }
+}
+
 int GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
-    if (auto x = std::dynamic_pointer_cast<StatementsNode>(ast)) {
+    if (auto x = std::dynamic_pointer_cast<BlockNode>(ast)) {
+        std::string block_label = labelAllocator.getLabel(LableType::BLOCK_LABEL);
+        cglabel(block_label.c_str()); // Generate a label for the block
         for (const auto& stmt : x->getStatements()) {
             int reg = walkStatement(stmt); // Walk each statement in the statements node
             if (stmt->getStmtType() == S_ASSIGN) {
@@ -69,6 +96,22 @@ int GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         int reg = walkExpr(x->getExpr());
         cgstorglob(reg, x->getIdentifier().name.c_str());
         return reg;
+    } else if (auto x = std::dynamic_pointer_cast<IfStatementNode>(ast)) {
+        // 目前只考虑都是Block
+        std::string if_label_no = labelAllocator.getLabel(LableType::IF_LABEL);
+        std::string if_true = "IF_TRUE_" + if_label_no;
+        std::string if_false = "IF_FALSE_" + if_label_no;
+        std::string if_end = "IF_END_" + if_label_no;
+        walkCondition(x->getCondition(), if_false); // Walk the condition and generate code for the jump
+        cglabel(if_true.c_str());
+        walkStatement(x->getThenStatement()); // Walk the then statement
+        cgjump(if_end.c_str());
+        cglabel(if_false.c_str());
+        if (x->getElseStatement() != nullptr) {
+            walkStatement(x->getElseStatement()); // Walk the else statement
+        }
+        cglabel(if_end.c_str()); // Generate the end label for the if statement
+        return 0;
     } else {
         throw std::runtime_error("GenCode::generate: Unknown statement node type");
     }

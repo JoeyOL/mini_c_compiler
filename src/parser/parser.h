@@ -52,14 +52,15 @@ public:
     std::shared_ptr<ExprNode> parseMultiplicativeExpression();
 
     // print 语句的解析
-    /* statements: statement
-     | statement statements
-     ;
+    /* block: : '{' '}'          // empty, i.e. no statement
+      |      '{' statement '}'
+      |      '{' statement statements '}'
+      ;
 
     statement: 'print' expression ';'
      ;
      */
-    std::shared_ptr<StatementsNode> parseStatements();
+    std::shared_ptr<BlockNode> parseBlock();
     std::shared_ptr<PrintStatementNode> parsePrintStatement();
 
     // 有关变量
@@ -79,6 +80,18 @@ public:
 
     std::shared_ptr<VariableDeclareNode> parseVariableDeclare();
     std::shared_ptr<AssignmentNode> parseAssignment();
+
+    // TODO 目前必须要有{}
+    // if_else 
+    /*
+    if_statement: if_head
+    |        if_head 'else' block
+    ;
+
+    if_head: 'if' '(' expression ')' block  ;
+    */
+   std::shared_ptr<IfStatementNode> parseIfStatement();
+   
 
 private:
     std::vector<Token> &toks;

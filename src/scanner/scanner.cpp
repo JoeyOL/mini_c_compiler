@@ -183,6 +183,10 @@ bool Scanner::scan(Token& token) {
             token.type = T_NE;
         }
         else token.type = T_NOT;
+    } else if (c == '{') {
+        token.type = T_LBRACE;
+    } else if (c == '}') {
+        token.type = T_RBRACE;
     } else {
 Error:
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 

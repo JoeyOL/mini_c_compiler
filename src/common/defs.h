@@ -8,9 +8,30 @@
 
 const int MAX_IDENTIFIER_LENGTH = 1024; // Maximum length for identifiers
 
+enum LableType {
+    IF_LABEL,
+    BLOCK_LABEL
+};
+
+class LabelAllocator {
+public:
+    std::string getLabel(LableType l) {
+        if (l == IF_LABEL) {
+            return std::to_string(ifLabelCounter++);
+        } else if (l == BLOCK_LABEL) {
+            return "BLOCK_" + std::to_string(blockLabelCounter++);
+        }
+    }
+private:
+    int ifLabelCounter = 0;
+    int blockLabelCounter = 0;
+};
+static LabelAllocator labelAllocator; // Static label allocator for generating unique labels
+
 
 enum TokenType {
-    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_IDENTIFIER, T_PRINT, 
+    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE,
+    T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA,
     T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT
 };

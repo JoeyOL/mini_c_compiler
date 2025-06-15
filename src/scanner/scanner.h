@@ -14,6 +14,10 @@ class Scanner {
         std::map<std::string, TokenType> keywords = {
             {"print", T_PRINT},
             {"int", T_INT},
+            {"if", T_IF},
+            {"else", T_ELSE},
+            {"while", T_WHILE},
+            {"for", T_FOR},
         };
         int line_no;
         int column_no;

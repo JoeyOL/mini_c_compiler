@@ -107,9 +107,10 @@ std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() {
     return std::make_shared<PrintStatementNode>(std::move(expr));
 }
 
-std::shared_ptr<StatementsNode> Parser::parseStatements() { 
-    std::shared_ptr<StatementsNode> stmts = std::make_shared<StatementsNode>();
-    while (current < toks.size()) {
+std::shared_ptr<BlockNode> Parser::parseBlock() { 
+    std::shared_ptr<BlockNode> stmts = std::make_shared<BlockNode>();
+    assert(consume().type == T_LBRACE);
+    while (current < toks.size() && peek().type != T_RBRACE) {
         if (peek().type == T_PRINT) {
             std::shared_ptr<StatementNode> stmt = parsePrintStatement();
             stmts->addStatement(stmt);
@@ -119,12 +120,19 @@ std::shared_ptr<StatementsNode> Parser::parseStatements() {
         } else if (peek().type == T_IDENTIFIER) {
             std::shared_ptr<AssignmentNode> assign_stmt = parseAssignment();
             stmts->addStatement(assign_stmt);
+        } else if (peek().type == T_LBRACE) {
+            std::shared_ptr<BlockNode> block = parseBlock();
+            stmts->addStatement(block);
+        } else if (peek().type == T_IF) { 
+            std::shared_ptr<IfStatementNode> if_stmt = parseIfStatement();
+            stmts->addStatement(if_stmt);
         } else {
             throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
                 std::to_string(peek().line_no) + ", column " + 
                 std::to_string(peek().column_no));
         }
     }
+    assert(consume().type == T_RBRACE);
     return stmts;
 }
 
@@ -167,4 +175,20 @@ std::shared_ptr<AssignmentNode> Parser::parseAssignment() {
     std::shared_ptr<ExprNode> expr = parseBinaryExpressionWithPrecedence(0);
     assert(consume().type == T_SEMI);
     return std::shared_ptr<AssignmentNode>(new AssignmentNode(sym, std::move(expr)));
+}
+
+std::shared_ptr<IfStatementNode> Parser::parseIfStatement() {
+    assert(consume().type == T_IF);
+    assert(consume().type == T_LPAREN);
+    // 注意到condition可能是一算术表达式，而不是比较
+    std::shared_ptr<ExprNode> condition = parseBinaryExpressionWithPrecedence(0);
+    assert(consume().type == T_RPAREN);
+    std::shared_ptr<BlockNode> then_stmt = parseBlock();
+    if (peek().type == T_ELSE) {
+        consume();
+        std::shared_ptr<BlockNode> else_stmt = parseBlock();
+        return std::make_shared<IfStatementNode>(condition, then_stmt, else_stmt);
+    } else {
+        return std::make_shared<IfStatementNode>(condition, then_stmt);
+    }
 }

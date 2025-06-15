@@ -191,7 +191,7 @@ class GenCode {
             outputFile <<
                 "\tcmpq\t" << regManager->getRegister(r2) << "," << regManager->getRegister(r1) << "\n"
                 "\t" << op << "\t" << regManager->getRegisterLower8bit(r2) << "\n"
-                "\tandq\t$255," << regManager->getRegister(r2) << "\n"; 
+                "\tmovzbq\t" << regManager->getRegisterLower8bit(r2) << "," << regManager->getRegister(r2) << "\n"; 
             regManager->freeRegister(r1);
             return r2;
         }
@@ -225,7 +225,53 @@ class GenCode {
             return cgcompare(r1, r2, "sete");
         }
 
+        void cglabel(const char *label) {
+            outputFile << label << ":\n"; // Generate a label in the output file
+        }
+
+        void cgjump(const char* label) {
+            outputFile << "\tjmp\t" << label << "\n"; // Generate an unconditional jump to the specified label
+        }
+
+        void cgequaljump(int r1, int r2, const char *label) {
+            outputFile << "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
+                       << "\tje\t" << label << "\n"; // Generate a conditional jump if equal
+            regManager->freeRegister(r1);
+            regManager->freeRegister(r2);
+        }
+        void cgnotequaljump(int r1, int r2, const char *label) {
+            outputFile << "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
+                       << "\tjne\t" << label << "\n"; // Generate a conditional jump if not equal
+            regManager->freeRegister(r1);
+            regManager->freeRegister(r2);
+        }
+        void cggreaterequaljump(int r1, int r2, const char *label) {
+            outputFile << "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
+                       << "\tjge\t" << label << "\n"; // Generate a conditional jump if greater than or equal
+            regManager->freeRegister(r1);
+            regManager->freeRegister(r2);
+        }
+        void cglessequaljump(int r1, int r2, const char *label) {
+            outputFile << "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
+                       << "\tjle\t" << label << "\n"; // Generate a conditional jump if less than or equal
+            regManager->freeRegister(r1);
+            regManager->freeRegister(r2);
+        }
+        void cglessthanjump(int r1, int r2, const char *label) {
+            outputFile << "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
+                       << "\tjl\t" << label << "\n"; // Generate a conditional jump if less than
+            regManager->freeRegister(r1);
+            regManager->freeRegister(r2);
+        }
+        void cggreaterthanjump(int r1, int r2, const char *label) {
+            outputFile << "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
+                       << "\tjg\t" << label << "\n"; // Generate a conditional jump if greater than
+            regManager->freeRegister(r1);
+            regManager->freeRegister(r2);
+        }
+
         int walkAST(const std::shared_ptr<ASTNode>& ast);
         int walkStatement(const std::shared_ptr<StatementNode>& ast);
         int walkExpr(const std::shared_ptr<ExprNode>& ast);
+        void walkCondition(const std::shared_ptr<ExprNode>& ast, std::string false_label);
 };

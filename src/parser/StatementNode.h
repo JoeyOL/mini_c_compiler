@@ -5,12 +5,14 @@
 
 #pragma once
 
-class StatementsNode : public StatementNode {
+class BlockNode : public StatementNode {
     public:
-        StatementsNode() = default;
-        ~StatementsNode() = default;
+        BlockNode() {
+            type = S_BLOCK; // Set the statement type to block
+        };
+        ~BlockNode() = default;
         void walk(std::string prefix) override {
-            std::cout << prettyPrint(prefix) << "Statements node :" << std::endl;
+            std::cout << prettyPrint(prefix) << "Block node :" << std::endl;
             for (const auto& stmt : statements) {
                 stmt->walk(prefix + "\t"); // Walk each statement
             }
@@ -21,6 +23,8 @@ class StatementsNode : public StatementNode {
         std::vector<std::shared_ptr<StatementNode>> getStatements() const {
             return statements; // Return the list of statements
         }
+        bool is_labeled = false; // Flag to indicate if the block has a label
+
     private:
         std::vector<std::shared_ptr<StatementNode>> statements; // List of statements
 };
@@ -114,4 +118,41 @@ class AssignmentNode : public StatementNode {
     private:
         Symbol identifier; // Identifier for the variable being assigned
         std::shared_ptr<ExprNode> expression; // Expression to assign to the variable
+};
+
+
+class IfStatementNode : public StatementNode {
+    public:
+        IfStatementNode(std::shared_ptr<ExprNode> condition, 
+                        std::shared_ptr<StatementNode> then_stmt, 
+                        std::shared_ptr<StatementNode> else_stmt = nullptr)
+            : condition(std::move(condition)), then_stmt(std::move(then_stmt)), else_stmt(std::move(else_stmt)) {
+            type = S_IF; // Set the statement type to if
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "If Statement: " << std::endl;
+            condition->walk(prefix + "\t"); // Walk the condition expression
+            then_stmt->walk(prefix + "\t"); // Walk the then statement
+            if (else_stmt) {
+                std::cout << prettyPrint(prefix + "\t") << "Else Statement: " << std::endl;
+                else_stmt->walk(prefix + "\t\t"); // Walk the else statement if it exists
+            }
+        }
+
+        std::shared_ptr<ExprNode> getCondition() const {
+            return condition; // Return the condition expression
+        }
+
+        std::shared_ptr<StatementNode> getThenStatement() const {
+            return then_stmt; // Return the then statement
+        }
+
+        std::shared_ptr<StatementNode> getElseStatement() const {
+            return else_stmt; // Return the else statement if it exists
+        }
+    private:
+        std::shared_ptr<ExprNode> condition;
+        std::shared_ptr<StatementNode> then_stmt;
+        std::shared_ptr<StatementNode> else_stmt;
 };
