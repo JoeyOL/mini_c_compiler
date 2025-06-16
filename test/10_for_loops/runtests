@@ -1,0 +1,27 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+for i in test/10_for_loops/input*
+do if [ ! -f "test/10_for_loops/out.${i##*/}" ]
+   then echo "Can't run test on ${i##*/}, no output file!"
+   else
+     echo -n ${i##*/}
+     ./build/comp $i 
+     cc -o output output.s
+     ./output > test/10_for_loops/trial.${i##*/}
+     sed -i 's/\r//' test/10_for_loops/out.${i##*/}
+     cmp -s "test/10_for_loops/out.${i##*/}" "test/10_for_loops/trial.${i##*/}"
+     if [ "$?" -eq "1" ]
+     then echo ": failed"
+       diff -c "test/10_for_loops/out.${i##*/}" "test/10_for_loops/trial.${i##*/}"
+       echo
+     else echo ": OK"
+     fi
+          rm -f output output.s "test/10_for_loops/trial.${i##*/}"
+   fi
+done
