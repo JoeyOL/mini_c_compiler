@@ -10,7 +10,9 @@ const int MAX_IDENTIFIER_LENGTH = 1024; // Maximum length for identifiers
 
 enum LableType {
     IF_LABEL,
-    BLOCK_LABEL
+    BLOCK_LABEL,
+    WHILE_LABEL,
+    FOR_LABEL,
 };
 
 class LabelAllocator {
@@ -20,11 +22,17 @@ public:
             return std::to_string(ifLabelCounter++);
         } else if (l == BLOCK_LABEL) {
             return "BLOCK_" + std::to_string(blockLabelCounter++);
+        } else if (l == WHILE_LABEL) {
+            return std::to_string(whileLabelCounter++);
+        } else if (l == FOR_LABEL) {
+            return std::to_string(forLabelCounter++);
         }
     }
 private:
     int ifLabelCounter = 0;
     int blockLabelCounter = 0;
+    int whileLabelCounter = 0;
+    int forLabelCounter = 0;
 };
 static LabelAllocator labelAllocator; // Static label allocator for generating unique labels
 
@@ -33,7 +41,7 @@ enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA,
-    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT
+    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_AND, T_OR
 };
 
 enum PrimitiveType {
@@ -46,7 +54,7 @@ enum StmtType {
 
 enum ExprType {
     A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
-    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE
+    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE, A_AND, A_OR
 };
 
 enum UnaryOp {
@@ -279,5 +287,7 @@ static const std::map<ExprType, int> precedence = {
     {A_LT, 10},
     {A_GT, 10},
     {A_LE, 10},
-    {A_GE, 10}
+    {A_GE, 10},
+    {A_AND, 3},
+    {A_OR, 2}
 };

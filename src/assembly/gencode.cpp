@@ -2,10 +2,16 @@
 
 int GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) { 
     if (auto x = std::dynamic_pointer_cast<BinaryExpNode>(ast)) {
+        // TODO
+        // if (x->getOp() == A_AND) {
+        //     return walkAndExpr(x);
+        // } else if (x->getOp() == A_OR) {
+        //     return walkOrExpr(x);
+        // }
         // Handle binary expression node
         int reg1 = walkAST(x->getLeft());
         int reg2 = walkAST(x->getRight());
-        switch (x->getType()) {
+        switch (x->getOp()) {
             case A_ADD: return cgadd(reg1, reg2); // Add the two registers and return the result
             case A_SUBTRACT: return cgsub(reg1, reg2); // Subtract the two registers and return the result
             case A_MULTIPLY: return cgmul(reg1, reg2); // Multiply the two registers and return the result
@@ -45,7 +51,7 @@ void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string fa
     if (auto x = std::dynamic_pointer_cast<BinaryExpNode>(ast)) {
         int reg1 = walkAST(x->getLeft()); // Walk the left expression
         int reg2 = walkAST(x->getRight()); // Walk the right expression
-        switch (x->getType()) {
+        switch (x->getOp()) {
             case A_EQ: return cgnotequaljump(reg1, reg2, false_label.c_str());
             case A_NE: return cgequaljump(reg1, reg2, false_label.c_str());
             case A_LT: return cggreaterequaljump(reg1, reg2, false_label.c_str());
@@ -111,6 +117,16 @@ int GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
             walkStatement(x->getElseStatement()); // Walk the else statement
         }
         cglabel(if_end.c_str()); // Generate the end label for the if statement
+        return 0;
+    } else if (auto x = std::dynamic_pointer_cast<WhileStatementNode>(ast)) {
+        std::string while_label_no = labelAllocator.getLabel(LableType::WHILE_LABEL);
+        std::string while_start = "WHILE_START_" + while_label_no;
+        std::string while_end = "WHILE_END_" + while_label_no;
+        cglabel(while_start.c_str()); // Generate the start label for the while loop
+        walkCondition(x->getCondition(), while_end); // Walk the condition and generate code for the jump
+        walkStatement(x->getBody()); // Walk the body of the while loop
+        cgjump(while_start.c_str()); // Jump back to the start of the loop
+        cglabel(while_end.c_str()); // Generate the end label for the while loop
         return 0;
     } else {
         throw std::runtime_error("GenCode::generate: Unknown statement node type");

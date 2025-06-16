@@ -4,11 +4,16 @@
 #include "assembly/gencode.h"
 #include <iostream>
 #include <vector>
+#include <filesystem>
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
+    if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <source_file>" << std::endl;
         return 1;
+    }
+    std::string output_file = "output.s";
+    if (argc > 2) {
+        output_file += argv[2]; // Allow user to specify output file
     }
     try {
         Scanner scanner = Scanner(argv[1]);
@@ -48,7 +53,8 @@ int main(int argc, char *argv[]) {
         std::cout << "AST walk completed." << std::endl;
 
         // Code generation would go here, e.g., generating assembly code from the AST
-        GenCode genCode("output.s");
+        std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
+        GenCode genCode(output_file);
         genCode.generate(ast);
         std::cout << "Code generation completed. Output written to output.s." << std::endl;
 

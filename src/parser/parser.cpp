@@ -16,7 +16,7 @@ std::shared_ptr<ExprNode> Parser::parimary() {
     if (tok.type == T_PLUS || tok.type == T_MINUS || tok.type == T_NOT) {
         return std::make_shared<UnaryExpNode>(tok.type, parimary());
     } else if (tok.type == T_LPAREN) {
-        auto ret = parseBinaryExpressionWithPrecedence(0);
+        auto ret = parseExpressionWithPrecedence(0);
         if (current >= toks.size() || peek().type != T_RPAREN) {
             throw std::runtime_error("Parser::parimary: Expected ')' at line " + 
                 std::to_string(tok.line_no) + ", column " + 
@@ -49,6 +49,8 @@ ExprType Parser::arithop(const Token &tok) {
         case T_LE: return A_LE;
         case T_GT: return A_GT;
         case T_GE: return A_GE;
+        case T_AND: return A_AND;
+        case T_OR: return A_OR;
         default:
             throw std::runtime_error("Parser::arithop: Unexpected token type " + 
                 std::to_string(tok.type) + " at line " + 
@@ -57,14 +59,14 @@ ExprType Parser::arithop(const Token &tok) {
     }
 }
 
-std::shared_ptr<ExprNode> Parser::parseBinaryExpressionWithPrecedence(int prev_precedence) {
+std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precedence) {
     std::shared_ptr<ExprNode> left = parimary();
     if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI) {
         return left; // If no token is available, return the left node
     }
     while (precedence.at(arithop(peek())) > prev_precedence) {
         ExprType type = arithop(consume());
-        std::shared_ptr<ExprNode> right = parseBinaryExpressionWithPrecedence(precedence.at(type));
+        std::shared_ptr<ExprNode> right = parseExpressionWithPrecedence(precedence.at(type));
         left = std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
         if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI) {
             return left; // If no token is available, return the left node
@@ -102,7 +104,7 @@ std::shared_ptr<ExprNode> Parser::parseMultiplicativeExpression() {
 
 std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() { 
     assert(consume().type == T_PRINT);
-    std::shared_ptr<ExprNode> expr = parseBinaryExpressionWithPrecedence(0);
+    std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
     assert(consume().type == T_SEMI);
     return std::make_shared<PrintStatementNode>(std::move(expr));
 }
@@ -126,6 +128,11 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
         } else if (peek().type == T_IF) { 
             std::shared_ptr<IfStatementNode> if_stmt = parseIfStatement();
             stmts->addStatement(if_stmt);
+        } else if (peek().type == T_WHILE) {
+            std::shared_ptr<WhileStatementNode> while_stmt = parseWhileStatement();
+            stmts->addStatement(while_stmt);
+        } else if (peek().type == T_SEMI) {
+            consume(); // Skip empty statement
         } else {
             throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
                 std::to_string(peek().line_no) + ", column " + 
@@ -151,7 +158,7 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
         std::string var_name = consume().value.strvalue;
         if (peek().type == T_ASSIGN) {
             consume();
-            std::shared_ptr<ExprNode> initializer = parseBinaryExpressionWithPrecedence(0);
+            std::shared_ptr<ExprNode> initializer = parseExpressionWithPrecedence(0);
             var_decl->addIdentifier(var_name, std::move(initializer));
         } else {
             var_decl->addIdentifier(var_name);
@@ -172,7 +179,7 @@ std::shared_ptr<AssignmentNode> Parser::parseAssignment() {
     }
     Symbol sym = symbol_table.getSymbol(identifier); // Check if the identifier exists in the symbol table
     assert(consume().type == T_ASSIGN); // Skip the '=' token
-    std::shared_ptr<ExprNode> expr = parseBinaryExpressionWithPrecedence(0);
+    std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
     assert(consume().type == T_SEMI);
     return std::shared_ptr<AssignmentNode>(new AssignmentNode(sym, std::move(expr)));
 }
@@ -181,7 +188,7 @@ std::shared_ptr<IfStatementNode> Parser::parseIfStatement() {
     assert(consume().type == T_IF);
     assert(consume().type == T_LPAREN);
     // 注意到condition可能是一算术表达式，而不是比较
-    std::shared_ptr<ExprNode> condition = parseBinaryExpressionWithPrecedence(0);
+    std::shared_ptr<ExprNode> condition = parseExpressionWithPrecedence(0);
     assert(consume().type == T_RPAREN);
     std::shared_ptr<BlockNode> then_stmt = parseBlock();
     if (peek().type == T_ELSE) {
@@ -191,4 +198,13 @@ std::shared_ptr<IfStatementNode> Parser::parseIfStatement() {
     } else {
         return std::make_shared<IfStatementNode>(condition, then_stmt);
     }
+}
+
+std::shared_ptr<WhileStatementNode> Parser::parseWhileStatement() {
+    assert(consume().type == T_WHILE);
+    assert(consume().type == T_LPAREN);
+    std::shared_ptr<ExprNode> condition = parseExpressionWithPrecedence(0);
+    assert(consume().type == T_RPAREN);
+    std::shared_ptr<BlockNode> body = parseBlock();
+    return std::make_shared<WhileStatementNode>(std::move(condition), std::move(body));
 }

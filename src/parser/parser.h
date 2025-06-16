@@ -27,7 +27,7 @@ public:
             ;
     */
 
-    std::shared_ptr<ExprNode> parseBinaryExpressionWithPrecedence(int prev_precedence);
+    std::shared_ptr<ExprNode> parseExpressionWithPrecedence(int prev_precedence);
     // 2. 使用加法和乘法的两个BNF
     /*
         expression: additive_expression
@@ -91,6 +91,9 @@ public:
     if_head: 'if' '(' expression ')' block  ;
     */
    std::shared_ptr<IfStatementNode> parseIfStatement();
+
+   // while: while_statement: 'while' '(' true_false_expression ')' compound_statement  ;
+   std::shared_ptr<WhileStatementNode> parseWhileStatement();
    
 
 private:

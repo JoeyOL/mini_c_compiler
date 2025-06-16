@@ -6,17 +6,11 @@
 
 class BinaryExpNode : public ExprNode {
     public:
-        BinaryExpNode(ExprType type, std::shared_ptr<ASTNode> left, std::shared_ptr<ASTNode> right)
-            : type(type), left(std::move(left)), right(std::move(right)) {
-                if (this->left->getType() == P_FLOAT || 
-                    this->right->getType() == P_FLOAT) {
-                    value.setFloatValue(0.0); // Initialize to float  if any operand is float
-                } else {
-                    value.setIntValue(0); // Initialize to int otherwise
-                }
+        BinaryExpNode(ExprType op, std::shared_ptr<ASTNode> left, std::shared_ptr<ASTNode> right)
+            : op(op), left(std::move(left)), right(std::move(right)) {
             }
 
-        ExprType getType() const { return type; }
+        ExprType getOp() const { return op; }
         std::shared_ptr<ASTNode> getLeft() const { return left; }
         std::shared_ptr<ASTNode> getRight() const { return right; }
         std::string convertTypeToString() const {
@@ -30,9 +24,11 @@ class BinaryExpNode : public ExprNode {
                 {A_LT, "Less Than"},
                 {A_LE, "Less Than or Equal"},
                 {A_GT, "Greater Than"},
-                {A_GE, "Greater Than or Equal"}
+                {A_GE, "Greater Than or Equal"},
+                {A_AND, "And"},
+                {A_OR, "Or"},
             };
-            auto it = typeToString.find(type);
+            auto it = typeToString.find(op);
             if (it != typeToString.end()) {
                 return it->second;
             } else {
@@ -69,7 +65,7 @@ class BinaryExpNode : public ExprNode {
         }
 
     private:
-        ExprType type;
+        ExprType op;
         std::shared_ptr<ASTNode> left;
         std::shared_ptr<ASTNode> right;
 };

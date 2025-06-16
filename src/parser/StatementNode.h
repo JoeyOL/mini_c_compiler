@@ -156,3 +156,28 @@ class IfStatementNode : public StatementNode {
         std::shared_ptr<StatementNode> then_stmt;
         std::shared_ptr<StatementNode> else_stmt;
 };
+
+class WhileStatementNode : public StatementNode {
+    public:
+        WhileStatementNode(std::shared_ptr<ExprNode> condition, std::shared_ptr<StatementNode> body)
+            : condition(std::move(condition)), body(std::move(body)) {
+            type = S_WHILE; // Set the statement type to while
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "While Statement: " << std::endl;
+            condition->walk(prefix + "\t"); // Walk the condition expression
+            body->walk(prefix + "\t"); // Walk the body of the while loop
+        }
+
+        std::shared_ptr<ExprNode> getCondition() const {
+            return condition; // Return the condition expression
+        }
+
+        std::shared_ptr<StatementNode> getBody() const {
+            return body; // Return the body of the while loop
+        }
+    private:
+        std::shared_ptr<ExprNode> condition; // Condition for the while loop
+        std::shared_ptr<StatementNode> body; // Body of the while loop
+};
