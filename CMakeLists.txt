@@ -11,11 +11,14 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g")
 add_executable(comp
     src/main.cpp
     src/scanner/scanner.cpp
+    src/semantic/semantic.cpp
+    src/semantic/semantic.h
     src/parser/parser.cpp
     src/parser/ExprNode.h
     src/parser/StatementNode.h
     src/parser/parser.h
     src/assembly/gencode.cpp
+    src/assembly/backend/x86_64/x86_64.h
     src/assembly/gencode.h
 )
 

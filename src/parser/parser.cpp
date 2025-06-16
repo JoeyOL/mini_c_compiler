@@ -27,6 +27,10 @@ std::shared_ptr<ExprNode> Parser::parimary() {
     } else if (tok.type == T_NUMBER) {
         return std::make_shared<ValueNode>(tok.value);
     } else if (tok.type == T_IDENTIFIER) {
+        if (peek().type == T_ASSIGN) {
+            putback(); // Put back the identifier token
+            return parseAssignment();
+        }
         Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
         return std::make_shared<LValueNode>(sym);
     } else {
@@ -61,7 +65,7 @@ ExprType Parser::arithop(const Token &tok) {
 
 std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precedence) {
     std::shared_ptr<ExprNode> left = parimary();
-    if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI) {
+    if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI || peek().type == T_COMMA) {
         return left; // If no token is available, return the left node
     }
     while (precedence.at(arithop(peek())) > prev_precedence) {
@@ -116,7 +120,8 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
             std::shared_ptr<StatementNode> stmt = parsePrintStatement();
             assert(consume().type == T_SEMI);
             stmts->addStatement(stmt);
-        } else if (peek().type == T_INT) {
+        } else if (peek().type == T_INT || peek().type == T_CHAR 
+                || peek().type == T_FLOAT || peek().type == T_LONG) {
             std::shared_ptr<VariableDeclareNode> var_decl = parseVariableDeclare();
             assert(consume().type == T_SEMI);
             stmts->addStatement(var_decl);
@@ -149,8 +154,8 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
 }
 
 std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
-    auto var_decl = std::make_shared<VariableDeclareNode>(PrimitiveType::P_INT);
-    assert(consume().type == T_INT);
+    assert(peek().type == T_INT || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG);
+    auto var_decl = std::make_shared<VariableDeclareNode>(consume().type);
     do {
         if (peek().type == T_COMMA) {
             consume();
@@ -168,7 +173,7 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
         } else {
             var_decl->addIdentifier(var_name);
         }
-        symbol_table.addSymbol(var_name, P_INT); // Assuming all variables are of type int for simplicity
+        symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
     } while (current < toks.size() && peek().type == T_COMMA);
     return var_decl;
 }

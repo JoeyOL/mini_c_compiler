@@ -3,7 +3,8 @@
 #include <iostream>
 #include <vector>
 #include <string>
-
+#include <memory>
+#include <fstream>
 #pragma once
 
 const int MAX_IDENTIFIER_LENGTH = 1024; // Maximum length for identifiers
@@ -40,12 +41,12 @@ static LabelAllocator labelAllocator; // Static label allocator for generating u
 enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR,
-    T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID,
+    T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID, T_CHAR, T_FLOAT, T_LONG,
     T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_AND, T_OR
 };
 
 enum PrimitiveType {
-    P_INT, P_FLOAT, P_VOID, P_STRING
+    P_INT, P_FLOAT, P_VOID, P_STRING, P_CHAR, P_NONE, P_LONG
 };
 
 enum StmtType {
@@ -64,6 +65,7 @@ enum UnaryOp {
 struct Symbol {
     std::string name;
     PrimitiveType type;
+    int size;
     bool operator==(const std::string& other_name) const {
         return name == other_name;
     }
@@ -72,6 +74,15 @@ struct Symbol {
 struct SymbolTable {
     std::vector<Symbol> symbols;
 
+    int typeToSize(PrimitiveType type) const {
+        switch (type) {
+            case P_INT: return 4;
+            case P_FLOAT: return 8;
+            case P_CHAR: return 1;
+            case P_LONG: return 8;
+            default: throw std::runtime_error("SymbolTable::typeToSize: Unknown type");
+        }
+    }
     // TODO: 作用域
     void addSymbol(std::string name, PrimitiveType type) {
         for (const auto& symbol : symbols) {
@@ -79,7 +90,7 @@ struct SymbolTable {
                 throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
             }
         }
-        symbols.push_back({name, type});
+        symbols.push_back({name, type, typeToSize(type)});
     }
 
     Symbol getSymbol(std::string name) {
@@ -92,7 +103,7 @@ struct SymbolTable {
     }
 };
 
-static SymbolTable symbol_table;
+extern SymbolTable symbol_table;
 
 struct Value {
     PrimitiveType type;
@@ -194,6 +205,11 @@ struct Value {
     }
 };
 
+struct Reg {
+    PrimitiveType type;
+    int idx;
+};
+
 struct Token {
     TokenType type;
     Value value; // Value of the token, if applicable
@@ -210,8 +226,8 @@ class ASTNode {
         // virtual Value getValue() {
         //     throw std::runtime_error("ASTNode::getValue: Not implemented for this node type");
         // };
-        PrimitiveType getType() const {
-            return value.type; // Return the type of the value
+        virtual PrimitiveType getType() const {
+            return type; // Return the type of the value
         }
         static std::string prettyPrint(std::string prefix) {
             if (prefix.empty()) {
@@ -219,8 +235,13 @@ class ASTNode {
             }
             return prefix + "|--> ";
         }
+        virtual bool& isNeedTransform() {
+            return need_transform; // Return whether the node needs transformation
+        }
     protected:
-        Value value; 
+        PrimitiveType type; // Type of the AST node
+        bool need_transform = false; // Flag to indicate if the node needs transformation
+
 };
 
 class ExprNode: public ASTNode {
@@ -232,6 +253,8 @@ class ExprNode: public ASTNode {
         Value getValue() {
             return value; // Return the value of the expression node
         }
+    protected:
+        Value value; 
 };
 
 class StatementNode : public ASTNode {
@@ -247,7 +270,10 @@ class StatementNode : public ASTNode {
 
 class ValueNode : public ExprNode {
     public:
-        ValueNode(Value value) {this->value = value;}
+        ValueNode(Value value) {
+            this->value = value;
+            type = value.type; // Set the type based on the value
+        }
         ~ValueNode() = default;
         void walk(std::string prefix) override {
             // Implement the walk method to print the value

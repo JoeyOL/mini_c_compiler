@@ -8,6 +8,7 @@ class BinaryExpNode : public ExprNode {
     public:
         BinaryExpNode(ExprType op, std::shared_ptr<ExprNode> left, std::shared_ptr<ExprNode> right)
             : op(op), left(std::move(left)), right(std::move(right)) {
+                type = P_NONE;
             }
 
         ExprType getOp() const { return op; }
@@ -64,6 +65,33 @@ class BinaryExpNode : public ExprNode {
             // std::cout << " Result: " << value.toString() << std::endl;
         }
 
+        void updateType() {
+
+            // Update the type based on the left and right expressions
+            if (left->getType() == right->getType() ) {
+                type = left->getType(); // If both types are the same, use that type
+                return;
+            }
+            if (left->getType() == P_FLOAT || right->getType() == P_FLOAT) {
+                type = P_FLOAT;
+            } else if (left->getType() == P_LONG || right->getType() == P_LONG) {
+                type = P_LONG; // If either is long, the result is long
+            } else if (left->getType() == P_INT || right->getType() == P_INT) {
+                type = P_INT;
+                if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
+                    type = P_LONG; // Comparison operations return an integer type
+                    return;
+                }
+            } else if (left->getType() == P_CHAR || right->getType() == P_CHAR) {
+                type = P_CHAR; // If either is char, the result is char
+                if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
+                    type = P_LONG; // Comparison operations return an integer type
+                    return;
+                }
+            } 
+
+
+        }
     private:
         ExprType op;
         std::shared_ptr<ExprNode> left;
@@ -73,7 +101,9 @@ class BinaryExpNode : public ExprNode {
 
 class UnaryExpNode : public ExprNode {
     public:
-        UnaryExpNode(UnaryOp op, std::shared_ptr<ExprNode> expr): op(op), expr(std::move(expr)) {}
+        UnaryExpNode(UnaryOp op, std::shared_ptr<ExprNode> expr): op(op), expr(std::move(expr)) {
+            type = P_NONE;
+        }
         UnaryExpNode(TokenType tok, std::shared_ptr<ExprNode> expr) {
             if (tok == T_PLUS) {
                 op = U_PLUS;
@@ -111,6 +141,9 @@ class UnaryExpNode : public ExprNode {
             //     value = expr->getValue(); // For unary plus, just return the value
             // }
         }
+        void updateType() {
+            type = expr->getType();
+        }
     private:
         UnaryOp op;
         std::shared_ptr<ExprNode> expr;
@@ -118,7 +151,9 @@ class UnaryExpNode : public ExprNode {
 
 class LValueNode : public ExprNode {
     public:
-        LValueNode(Symbol identifier) : identifier(std::move(identifier)) {}
+        LValueNode(Symbol identifier) : identifier(std::move(identifier)) {
+            type = identifier.type;
+        }
         Symbol getIdentifier() const { return identifier; }
         void walk(std::string prefix) override {
             // Implement the walk method to print the identifier

@@ -124,6 +124,12 @@ private:
         }
         return Token{T_EOF, Value{}, -1, -1}; // Return EOF token if out of bounds
     }
+    void putback() {
+        assert(current > 0 && current <= toks.size());
+        if (current > 0) {
+            --current; // Move back one token
+        }
+    }
     // Additional private methods for parsing would go here.
     // For example, methods to parse terms, factors, etc.
 };

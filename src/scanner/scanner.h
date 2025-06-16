@@ -19,6 +19,9 @@ class Scanner {
             {"while", T_WHILE},
             {"for", T_FOR},
             {"void", T_VOID},
+            {"char", T_CHAR},
+            {"long", T_LONG},
+            {"float", T_FLOAT}
         };
         int line_no;
         int column_no;

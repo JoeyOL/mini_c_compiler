@@ -2,9 +2,11 @@
 #include "scanner/scanner.h"
 #include "parser/parser.h"
 #include "assembly/gencode.h"
+#include "semantic/semantic.h"
 #include <iostream>
 #include <vector>
 #include <filesystem>
+SymbolTable symbol_table;
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -51,6 +53,11 @@ int main(int argc, char *argv[]) {
         std::cout << "Parsed AST successfully." << std::endl;
         ast->walk(""); // Walk the AST to print the structure and values
         std::cout << "AST walk completed." << std::endl;
+
+        std::cout << "Semantic check." << std::endl;
+        Semantic semantic(ast);
+        semantic.check();
+        std::cout << "Semantic check completed." << std::endl;
 
         // Code generation would go here, e.g., generating assembly code from the AST
         std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;

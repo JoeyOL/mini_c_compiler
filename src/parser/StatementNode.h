@@ -9,6 +9,7 @@ class BlockNode : public StatementNode {
     public:
         BlockNode() {
             stmt_type= S_BLOCK; // Set the statement type to block
+            type = P_NONE; // Set the type of the block to void
         };
         ~BlockNode() = default;
         void walk(std::string prefix) override {
@@ -42,6 +43,9 @@ class PrintStatementNode : public StatementNode {
         std::shared_ptr<ExprNode> getExpression() const {
             return expression; // Return the expression to print
         }
+        void setType(PrimitiveType type) {
+            this->type = type; // Set the type of the expression node
+        }
     private:
         std::shared_ptr<ExprNode> expression; // Expression to print
 };
@@ -50,12 +54,29 @@ class VariableDeclareNode : public StatementNode {
     public:
         VariableDeclareNode(PrimitiveType var_type) : var_type(var_type) {
             this->stmt_type= S_VARDEF; // Set the statement type to variable declaration
+            type = P_NONE; // Set the type of the variable
+        }
+
+        VariableDeclareNode(TokenType tok_type) {
+            this->stmt_type= S_VARDEF; // Set the statement type to variable declaration
+            if (tok_type == T_INT) {
+                var_type = P_INT; // Set the variable type to int
+            } else if (tok_type == T_CHAR) {
+                var_type = P_CHAR; // Set the variable type to char
+            } else if (tok_type == T_FLOAT) {
+                var_type = P_FLOAT; // Set the variable type to float
+            } else if (tok_type == T_LONG) {
+                var_type = P_LONG;
+            } else {
+                throw std::runtime_error("VariableDeclareNode: Unknown token type for variable declaration");
+            }
         }
 
         std::string convertTypeToString(PrimitiveType type) const {
             switch (type) {
                 case P_INT: return "int";
                 case P_FLOAT: return "float";
+                case P_CHAR: return "char";
                 default: return "unknown";
             }
         }
@@ -86,17 +107,23 @@ class VariableDeclareNode : public StatementNode {
             }
             return nullptr; // Return nullptr if no initializer exists for the identifier
         }
+
+        PrimitiveType getVariableType() const {
+            return var_type; // Return the type of the variable
+        }
+
     private:
         PrimitiveType var_type;
         std::vector<std::string> identifiers;
         std::map<std::string, std::shared_ptr<ExprNode>> initializers;
 };
 
-class AssignmentNode : public StatementNode {
+class AssignmentNode : public StatementNode, public ExprNode {
     public:
         AssignmentNode(Symbol identifier, std::shared_ptr<ExprNode> expr) 
             : identifier(std::move(identifier)), expression(std::move(expr)) {
             stmt_type= S_ASSIGN; // Set the statement type to assignment
+            ExprNode::type = identifier.type; // Set the type of the assignment to the identifier's type
         }
         void walk(std::string prefix) override {
             std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = " << std::endl;
@@ -108,6 +135,12 @@ class AssignmentNode : public StatementNode {
         }
         std::shared_ptr<ExprNode> getExpr() const {
             return expression; // Return the expression being assigned
+        }
+        PrimitiveType getType() const override {
+            return ExprNode::type; // Return the type of the expression node
+        }
+        bool & isNeedTransform() override {
+            return ExprNode::need_transform; // Return whether the assignment needs transformation
         }
     private:
         Symbol identifier; // Identifier for the variable being assigned
@@ -122,6 +155,7 @@ class IfStatementNode : public StatementNode {
                         std::shared_ptr<StatementNode> else_stmt = nullptr)
             : condition(std::move(condition)), then_stmt(std::move(then_stmt)), else_stmt(std::move(else_stmt)) {
             stmt_type= S_IF; // Set the statement type to if
+            type = P_NONE; // Set the type of the if statement to void
         }
 
         void walk(std::string prefix) override {
@@ -156,6 +190,7 @@ class WhileStatementNode : public StatementNode {
         WhileStatementNode(std::shared_ptr<ExprNode> condition, std::shared_ptr<StatementNode> body)
             : condition(std::move(condition)), body(std::move(body)) {
             stmt_type= S_WHILE; // Set the statement type to while
+            type = P_NONE; // Set the type of the while statement to void
         }
 
         void walk(std::string prefix) override {
@@ -182,6 +217,7 @@ class ForStatementNode : public StatementNode {
         ForStatementNode(std::shared_ptr<StatementNode> preop_stmt, std::shared_ptr<ExprNode> condition, std::shared_ptr<StatementNode> body, std::shared_ptr<StatementNode> postop_stmt)
             : condition(std::move(condition)), body(std::move(body)), preop_stmt(std::move(preop_stmt)), postop_stmt(std::move(postop_stmt)) {
             stmt_type = S_FOR; // Set the statement type to while
+            type = P_NONE; // Set the type of the for statement to void
         }
 
         void walk(std::string prefix) override {
@@ -221,6 +257,7 @@ class FunctionDeclareNode : public  StatementNode {
         FunctionDeclareNode(std::string identifier, PrimitiveType return_type, std::shared_ptr<BlockNode> body)
             : identifier(std::move(identifier)), return_type(return_type), body(std::move(body)) {
             stmt_type = S_FUNCTDEF; // Set the statement type to variable declaration
+            type = P_NONE;
         }
 
         std::string convertTypeToString(PrimitiveType type) const {
