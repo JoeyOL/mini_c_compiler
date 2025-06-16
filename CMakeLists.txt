@@ -26,4 +26,5 @@ target_include_directories(comp PRIVATE
 enable_testing()
 
 add_test(NAME while COMMAND bash -c "cd /home/joe/compiler; chmod +x test/09_while_statement/runtests; ./test/09_while_statement/runtests")
-add_test(NAME for_loop COMMAND bash -c "cd /home/joe/compiler; chmod +x test/10_for_loops/runtests; ./test/10_for_loops/runtests")
+add_test(NAME for_loops COMMAND bash -c "cd /home/joe/compiler; chmod +x test/10_for_loops/runtests; ./test/10_for_loops/runtests")
+add_test(NAME functions COMMAND bash -c "cd /home/joe/compiler; chmod +x test/11_functions/runtests; ./test/11_functions/runtests")

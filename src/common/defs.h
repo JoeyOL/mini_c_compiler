@@ -40,16 +40,16 @@ static LabelAllocator labelAllocator; // Static label allocator for generating u
 enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR,
-    T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA,
+    T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID,
     T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_AND, T_OR
 };
 
 enum PrimitiveType {
-    P_INT, P_FLOAT, P_STRING, P_BOOL
+    P_INT, P_FLOAT, P_VOID, P_STRING
 };
 
 enum StmtType {
-    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR
+    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR, S_FUNCTDEF
 };
 
 enum ExprType {
@@ -207,9 +207,9 @@ class ASTNode {
         ASTNode() = default;
         ~ASTNode() = default;
         virtual void walk(std::string prefix) = 0; // Pure virtual function for walking the AST
-        virtual Value getValue() {
-            throw std::runtime_error("ASTNode::getValue: Not implemented for this node type");
-        };
+        // virtual Value getValue() {
+        //     throw std::runtime_error("ASTNode::getValue: Not implemented for this node type");
+        // };
         PrimitiveType getType() const {
             return value.type; // Return the type of the value
         }
@@ -229,7 +229,7 @@ class ExprNode: public ASTNode {
         ~ExprNode() = default;
         // virtual ExprType getType() const = 0; // Pure virtual function to get the expression type
         // virtual std::string convertTypeToString() const = 0; // Convert expression type to string
-        Value getValue() override {
+        Value getValue() {
             return value; // Return the value of the expression node
         }
 };
@@ -239,10 +239,10 @@ class StatementNode : public ASTNode {
         StatementNode() = default;
         ~StatementNode() = default;
         StmtType getStmtType() const {
-            return type; // Return the type of the statement
+            return stmt_type; // Return the type of the statement
         }
     protected:
-        StmtType type; // Type of the statement
+        StmtType stmt_type; // Type of the statement
 };
 
 class ValueNode : public ExprNode {

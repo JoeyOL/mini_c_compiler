@@ -18,6 +18,7 @@ class Scanner {
             {"else", T_ELSE},
             {"while", T_WHILE},
             {"for", T_FOR},
+            {"void", T_VOID},
         };
         int line_no;
         int column_no;

@@ -107,6 +107,9 @@ public:
     std::shared_ptr<StatementNode> parseSingleStatement();
     std::shared_ptr<ForStatementNode> parseForStatement();
 
+    // function_declaration: 'void' identifier '(' ')' compound_statement   ;
+    std::shared_ptr<FunctionDeclareNode> parseFunctionDeclare();
+
 private:
     std::vector<Token> &toks;
     size_t current = 0;

@@ -131,8 +131,8 @@ class GenCode {
         }
 
         void cgpreamble() {
-            outputFile << 
-              "\t.text\n" 
+            regManager->freeAllRegister(); // Free all registers at the start
+            outputFile<< "\t.text\n"
               ".LC0:\n"
               "\t.string\t\"%d\\n\"\n"
               "printint:\n"
@@ -144,17 +144,8 @@ class GenCode {
               "\tmovl\t%eax, %esi\n"
               "\tleaq	.LC0(%rip), %rdi\n"
               "\tmovl	$0, %eax\n"
-              "\tcall	printf@PLT\n"
-              "\tnop\n"
-              "\tleave\n"
-              "\tret\n"
-              "\n"
-              "\t.globl\tmain\n"
-              "\t.type\tmain, @function\n"
-              "main:\n"
-              "\tpushq\t%rbp\n"
-              "\tmovq	%rsp, %rbp\n";
-        }
+              "\tcall	printf@PLT\n" "\tnop\n" "\tleave\n" "\tret\n" "\n";
+          }
 
         void cgpostamble() {
             outputFile << 
@@ -270,8 +261,27 @@ class GenCode {
             regManager->freeRegister(r2);
         }
 
+        void cgfuncpreamble(const char *name) {
+            outputFile << 
+                "\t.text\n"
+                "\t.globl\t" << name << "\n"
+                "\t.type\t" << name << ", @function\n"
+                << name << ":\n"
+                "\tpushq\t%rbp\n"
+                "\tmovq\t%rsp, %rbp\n";
+        }
+
+        void cgfuncpostamble() {
+            outputFile << 
+                "\tmovl\t$0, %eax\n" // Return 0
+                "\tpopq\t%rbp\n"
+                "\tret\n";
+            // regManager->freeAllRegister(); // Free all registers at the end of the function
+        }
+
         int walkAST(const std::shared_ptr<ASTNode>& ast);
         int walkStatement(const std::shared_ptr<StatementNode>& ast);
         int walkExpr(const std::shared_ptr<ExprNode>& ast);
         void walkCondition(const std::shared_ptr<ExprNode>& ast, std::string false_label);
+        void walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast);
 };

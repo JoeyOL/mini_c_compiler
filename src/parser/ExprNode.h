@@ -6,13 +6,13 @@
 
 class BinaryExpNode : public ExprNode {
     public:
-        BinaryExpNode(ExprType op, std::shared_ptr<ASTNode> left, std::shared_ptr<ASTNode> right)
+        BinaryExpNode(ExprType op, std::shared_ptr<ExprNode> left, std::shared_ptr<ExprNode> right)
             : op(op), left(std::move(left)), right(std::move(right)) {
             }
 
         ExprType getOp() const { return op; }
-        std::shared_ptr<ASTNode> getLeft() const { return left; }
-        std::shared_ptr<ASTNode> getRight() const { return right; }
+        std::shared_ptr<ExprNode> getLeft() const { return left; }
+        std::shared_ptr<ExprNode> getRight() const { return right; }
         std::string convertTypeToString() const {
             static const std::map<ExprType, std::string> typeToString = {
                 {A_ADD, "Addition"},
@@ -66,15 +66,15 @@ class BinaryExpNode : public ExprNode {
 
     private:
         ExprType op;
-        std::shared_ptr<ASTNode> left;
-        std::shared_ptr<ASTNode> right;
+        std::shared_ptr<ExprNode> left;
+        std::shared_ptr<ExprNode> right;
 };
 
 
 class UnaryExpNode : public ExprNode {
     public:
-        UnaryExpNode(UnaryOp op, std::shared_ptr<ASTNode> expr): op(op), expr(std::move(expr)) {}
-        UnaryExpNode(TokenType tok, std::shared_ptr<ASTNode> expr) {
+        UnaryExpNode(UnaryOp op, std::shared_ptr<ExprNode> expr): op(op), expr(std::move(expr)) {}
+        UnaryExpNode(TokenType tok, std::shared_ptr<ExprNode> expr) {
             if (tok == T_PLUS) {
                 op = U_PLUS;
             } else if (tok == T_MINUS) {
@@ -87,7 +87,7 @@ class UnaryExpNode : public ExprNode {
             this->expr = std::move(expr);
         }
         UnaryOp getOp() const { return op; }
-        std::shared_ptr<ASTNode> getExpr() const { return expr; }
+        std::shared_ptr<ExprNode> getExpr() const { return expr; }
         std::string convertTypeToString() const {
             switch (op) {
                 case U_PLUS:
@@ -113,7 +113,7 @@ class UnaryExpNode : public ExprNode {
         }
     private:
         UnaryOp op;
-        std::shared_ptr<ASTNode> expr;
+        std::shared_ptr<ExprNode> expr;
 };
 
 class LValueNode : public ExprNode {

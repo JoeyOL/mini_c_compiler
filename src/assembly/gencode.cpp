@@ -9,8 +9,8 @@ int GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         //     return walkOrExpr(x);
         // }
         // Handle binary expression node
-        int reg1 = walkAST(x->getLeft());
-        int reg2 = walkAST(x->getRight());
+        int reg1 = walkExpr(x->getLeft());
+        int reg2 = walkExpr(x->getRight());
         switch (x->getOp()) {
             case A_ADD: return cgadd(reg1, reg2); // Add the two registers and return the result
             case A_SUBTRACT: return cgsub(reg1, reg2); // Subtract the two registers and return the result
@@ -26,7 +26,7 @@ int GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
                 throw std::runtime_error("GenCode::generate: Unknown binary expression type");
         }
     } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(ast)) {
-        int reg = walkAST(x->getExpr()); // Walk the expression in the unary node
+        int reg = walkExpr(x->getExpr()); // Walk the expression in the unary node
         // Handle unary expression node
         if (x->getOp() == U_MINUS) {
             return cgneg(reg); // Load the integer value into a register
@@ -49,8 +49,8 @@ int GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
 
 void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string false_label) {
     if (auto x = std::dynamic_pointer_cast<BinaryExpNode>(ast)) {
-        int reg1 = walkAST(x->getLeft()); // Walk the left expression
-        int reg2 = walkAST(x->getRight()); // Walk the right expression
+        int reg1 = walkExpr(x->getLeft()); // Walk the left expression
+        int reg2 = walkExpr(x->getRight()); // Walk the right expression
         switch (x->getOp()) {
             case A_EQ: return cgnotequaljump(reg1, reg2, false_label.c_str());
             case A_NE: return cgequaljump(reg1, reg2, false_label.c_str());
@@ -149,11 +149,20 @@ int GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
     }
 }
 
+void GenCode::walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast) {
+    std::string func_name = ast->getIdentifier();
+    cgfuncpreamble(func_name.c_str()); // Generate function preamble code
+    walkStatement(ast->getBody()); // Walk the function body to generate code
+    cgfuncpostamble();
+
+}
+
 int GenCode::walkAST(const std::shared_ptr<ASTNode>& ast) {
-    if (auto x = std::dynamic_pointer_cast<ExprNode>(ast)) {
-        return walkExpr(x);
-    } else if (auto x  = std::dynamic_pointer_cast<StatementNode>(ast)) {
+    if (auto x = std::dynamic_pointer_cast<VariableDeclareNode>(ast)) {
         return walkStatement(x);
+    } if (auto x = std::dynamic_pointer_cast<FunctionDeclareNode>(ast)) {
+        walkFunction(x);
+        return 0;
     } else {
         throw std::runtime_error("GenCode::generate: Unknown AST node type");
     }
@@ -162,5 +171,5 @@ int GenCode::walkAST(const std::shared_ptr<ASTNode>& ast) {
 void GenCode::generate(const std::shared_ptr<ASTNode>& ast) {
     cgpreamble(); // Generate preamble code
     assert(walkAST(ast) == 0); // Walk the AST to generate code
-    cgpostamble(); // Generate postamble code
+    // cgpostamble(); // Generate postamble code
 }

@@ -241,3 +241,19 @@ std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
     std::shared_ptr<BlockNode> body = parseBlock();
     return std::make_shared<ForStatementNode>(std::move(preop_stmt), std::move(condition), std::move(body), std::move(postop_stmt));
 }
+
+
+// TODO: 目前只支持void类型的无参数函数
+std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
+    assert(consume().type == T_VOID);
+    if (current >= toks.size() || peek().type != T_IDENTIFIER) {
+        throw std::runtime_error("Parser::parseFunctionDeclare: Expected function name at line " + 
+            std::to_string(peek().line_no) + ", column " + 
+            std::to_string(peek().column_no));
+    }
+    std::string func_name = consume().value.strvalue;
+    assert(consume().type == T_LPAREN);
+    assert(consume().type == T_RPAREN);
+    std::shared_ptr<BlockNode> body = parseBlock();
+    return std::make_shared<FunctionDeclareNode>(func_name, P_VOID, std::move(body));
+}
