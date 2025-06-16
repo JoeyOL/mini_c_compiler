@@ -1,0 +1,18 @@
+#!/bin/sh
+# Make the output files for each test
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+test_dir="test/12_types"
+
+for i in test/12_types/input*
+do if [ ! -f "out.${i##*/}" ]
+   then
+     ./build/comp $i 
+     cc -o output output.s
+     ./output > test/12_types/out.${i##*/}
+     rm -f output output.s
+   fi
+done

@@ -1,0 +1,27 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+for i in test/12_types/input*
+do if [ ! -f "test/12_types/out.${i##*/}" ]
+   then echo "Can't run test on ${i##*/}, no output file!"
+   else
+     echo -n ${i##*/}
+     ./build/comp $i 
+     cc -o output output.s
+     ./output > test/12_types/trial.${i##*/}
+     sed -i 's/\r//' test/12_types/out.${i##*/}
+     cmp -s "test/12_types/out.${i##*/}" "test/12_types/trial.${i##*/}"
+     if [ "$?" -eq "1" ]
+     then echo ": failed"
+       diff -c "test/12_types/out.${i##*/}" "test/12_types/trial.${i##*/}"
+       echo
+     else echo ": OK"
+     fi
+          rm -f output output.s "test/12_types/trial.${i##*/}"
+   fi
+done

@@ -1,0 +1,10 @@
+void main() {
+    int a, b, c; char d;
+    d = b = c = a = 247;
+    print a;
+    print b;
+    print c;
+    print d; 
+    d = 255 + 2;
+    print d;
+}
