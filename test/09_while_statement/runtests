@@ -1,0 +1,26 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+for i in test/09_while_statement/input*
+do if [ ! -f "test/09_while_statement/out.${i##*/}" ]
+   then echo "Can't run test on ${i##*/}, no output file!"
+   else
+     echo -n ${i##*/}
+     ./build/comp $i 
+     cc -o output output.s
+     ./output > test/09_while_statement/trial.${i##*/}
+     cmp -s "test/09_while_statement/out.${i##*/}" "test/09_while_statement/trial.${i##*/}"
+     if [ "$?" -eq "1" ]
+     then echo ": failed"
+       diff -c "out.${i##*/}" "trial.${i##*/}"
+       echo
+     else echo ": OK"
+     fi
+          rm -f output output.s "test/09_while_statement/trial.${i##*/}"
+   fi
+done

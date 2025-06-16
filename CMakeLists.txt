@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS "-Wall -O0 -g -ggdb3")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g")
 
-add_executable(scanner
+add_executable(comp
     src/main.cpp
     src/scanner/scanner.cpp
     src/parser/parser.cpp
@@ -19,6 +19,10 @@ add_executable(scanner
     src/assembly/gencode.h
 )
 
-target_include_directories(scanner PRIVATE
+target_include_directories(comp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
+
+enable_testing()
+
+add_test(NAME comp1 COMMAND bash -c "cd /home/joe/compiler; chmod +x test/09_while_statement/runtests; ./test/09_while_statement/runtests")
