@@ -181,3 +181,42 @@ class WhileStatementNode : public StatementNode {
         std::shared_ptr<ExprNode> condition; // Condition for the while loop
         std::shared_ptr<StatementNode> body; // Body of the while loop
 };
+
+
+class ForStatementNode : public StatementNode {
+    public:
+        ForStatementNode(std::shared_ptr<StatementNode> preop_stmt, std::shared_ptr<ExprNode> condition, std::shared_ptr<StatementNode> body, std::shared_ptr<StatementNode> postop_stmt)
+            : condition(std::move(condition)), body(std::move(body)), preop_stmt(std::move(preop_stmt)), postop_stmt(std::move(postop_stmt)) {
+            type = S_FOR; // Set the statement type to while
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "For Statement: " << std::endl;
+            if (preop_stmt) {
+                preop_stmt->walk(prefix + "\t"); // Walk the pre-work statement of the for loop
+            }
+            condition->walk(prefix + "\t"); // Walk the condition expression
+            body->walk(prefix + "\t"); // Walk the body of the while loop
+        }
+
+        std::shared_ptr<ExprNode> getCondition() const {
+            return condition; // Return the condition expression
+        }
+
+        std::shared_ptr<StatementNode> getBody() const {
+            return body; // Return the body of the while loop
+        }
+
+        std::shared_ptr<StatementNode> getPreopStatement() const {
+            return preop_stmt; // Return the pre-operation statement
+        }
+        std::shared_ptr<StatementNode> getPostopStatement() const {
+            return postop_stmt; // Return the post-operation statement
+        }
+    private:
+        std::shared_ptr<StatementNode> preop_stmt;
+        std::shared_ptr<ExprNode> condition; // Condition for the while loop
+        std::shared_ptr<StatementNode> body; // Body of the while loop
+        std::shared_ptr<StatementNode> postop_stmt;
+
+};

@@ -94,7 +94,18 @@ public:
 
    // while: while_statement: 'while' '(' true_false_expression ')' compound_statement  ;
    std::shared_ptr<WhileStatementNode> parseWhileStatement();
-   
+
+   // for: 
+   /*
+    for_statement: 'for' '(' preop_statement ';'
+                          true_false_expression ';'
+                          postop_statement ')' compound_statement  ;
+
+    preop_statement:  statement  ;        (for now)
+    postop_statement: statement  ;        (for now)
+ */
+    std::shared_ptr<StatementNode> parseSingleStatement();
+    std::shared_ptr<ForStatementNode> parseForStatement();
 
 private:
     std::vector<Token> &toks;

@@ -128,6 +128,22 @@ int GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         cgjump(while_start.c_str()); // Jump back to the start of the loop
         cglabel(while_end.c_str()); // Generate the end label for the while loop
         return 0;
+    } else if (auto x = std::dynamic_pointer_cast<ForStatementNode>(ast)) {
+        std::string for_label_no = labelAllocator.getLabel(LableType::FOR_LABEL);
+        std::string for_start = "FOR_START_" + for_label_no;
+        std::string for_end = "FOR_END_" + for_label_no;
+        if (x->getPreopStatement() != nullptr) {
+            walkStatement(x->getPreopStatement()); // Walk the pre-operation statement
+        }
+        cglabel(for_start.c_str()); // Generate the start label for the for loop
+        walkCondition(x->getCondition(), for_end); // Walk the condition and generate code for the jump
+        walkStatement(x->getBody()); // Walk the body of the for loop
+        if (x->getPostopStatement() != nullptr) {
+            walkStatement(x->getPostopStatement()); // Walk the post-operation statement
+        }
+        cgjump(for_start.c_str()); // Jump back to the start of the loop
+        cglabel(for_end.c_str()); // Generate the end label for the for loop
+        return 0;
     } else {
         throw std::runtime_error("GenCode::generate: Unknown statement node type");
     }

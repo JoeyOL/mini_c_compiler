@@ -105,7 +105,6 @@ std::shared_ptr<ExprNode> Parser::parseMultiplicativeExpression() {
 std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() { 
     assert(consume().type == T_PRINT);
     std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
-    assert(consume().type == T_SEMI);
     return std::make_shared<PrintStatementNode>(std::move(expr));
 }
 
@@ -115,12 +114,15 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
     while (current < toks.size() && peek().type != T_RBRACE) {
         if (peek().type == T_PRINT) {
             std::shared_ptr<StatementNode> stmt = parsePrintStatement();
+            assert(consume().type == T_SEMI);
             stmts->addStatement(stmt);
         } else if (peek().type == T_INT) {
             std::shared_ptr<VariableDeclareNode> var_decl = parseVariableDeclare();
+            assert(consume().type == T_SEMI);
             stmts->addStatement(var_decl);
         } else if (peek().type == T_IDENTIFIER) {
             std::shared_ptr<AssignmentNode> assign_stmt = parseAssignment();
+            assert(consume().type == T_SEMI);
             stmts->addStatement(assign_stmt);
         } else if (peek().type == T_LBRACE) {
             std::shared_ptr<BlockNode> block = parseBlock();
@@ -133,6 +135,9 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
             stmts->addStatement(while_stmt);
         } else if (peek().type == T_SEMI) {
             consume(); // Skip empty statement
+        } else if (peek().type == T_FOR) {
+            std::shared_ptr<ForStatementNode> for_stmt = parseForStatement();
+            stmts->addStatement(for_stmt);
         } else {
             throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
                 std::to_string(peek().line_no) + ", column " + 
@@ -165,7 +170,6 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
         }
         symbol_table.addSymbol(var_name, P_INT); // Assuming all variables are of type int for simplicity
     } while (current < toks.size() && peek().type == T_COMMA);
-    assert(consume().type == T_SEMI);
     return var_decl;
 }
 
@@ -180,7 +184,6 @@ std::shared_ptr<AssignmentNode> Parser::parseAssignment() {
     Symbol sym = symbol_table.getSymbol(identifier); // Check if the identifier exists in the symbol table
     assert(consume().type == T_ASSIGN); // Skip the '=' token
     std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
-    assert(consume().type == T_SEMI);
     return std::shared_ptr<AssignmentNode>(new AssignmentNode(sym, std::move(expr)));
 }
 
@@ -207,4 +210,34 @@ std::shared_ptr<WhileStatementNode> Parser::parseWhileStatement() {
     assert(consume().type == T_RPAREN);
     std::shared_ptr<BlockNode> body = parseBlock();
     return std::make_shared<WhileStatementNode>(std::move(condition), std::move(body));
+}
+
+std::shared_ptr<StatementNode> Parser::parseSingleStatement() {
+    if (peek().type == T_PRINT) {
+        return parsePrintStatement();
+    } else if (peek().type == T_INT) {
+        return parseVariableDeclare();
+    } else if (peek().type == T_IDENTIFIER) {
+        return parseAssignment();
+    } else if (peek().type == T_IF) {
+        return parseIfStatement();
+    } else if (peek().type == T_WHILE) {
+        return parseWhileStatement();
+    } else {
+        return nullptr;
+    }
+}
+
+
+std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
+    assert(consume().type == T_FOR);
+    assert(consume().type == T_LPAREN);
+    std::shared_ptr<StatementNode> preop_stmt = parseSingleStatement();
+    assert(consume().type == T_SEMI);
+    std::shared_ptr<ExprNode> condition = parseExpressionWithPrecedence(0);
+    assert(consume().type == T_SEMI);
+    std::shared_ptr<StatementNode> postop_stmt = parseSingleStatement();
+    assert(consume().type == T_RPAREN);
+    std::shared_ptr<BlockNode> body = parseBlock();
+    return std::make_shared<ForStatementNode>(std::move(preop_stmt), std::move(condition), std::move(body), std::move(postop_stmt));
 }

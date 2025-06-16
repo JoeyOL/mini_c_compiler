@@ -49,7 +49,7 @@ enum PrimitiveType {
 };
 
 enum StmtType {
-    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF
+    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR
 };
 
 enum ExprType {
