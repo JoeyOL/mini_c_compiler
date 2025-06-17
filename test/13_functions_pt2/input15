@@ -1,0 +1,8 @@
+long foo() {
+    return 2147483647;
+}
+
+void main() {
+    long d = foo() + 100;
+    printlong(d);
+}
