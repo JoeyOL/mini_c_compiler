@@ -21,7 +21,8 @@ class Scanner {
             {"void", T_VOID},
             {"char", T_CHAR},
             {"long", T_LONG},
-            {"float", T_FLOAT}
+            {"float", T_FLOAT},
+            {"return", T_RETURN},
         };
         int line_no;
         int column_no;

@@ -15,7 +15,7 @@ class GenCode {
         ~GenCode() = default;
 
         // Generate code for the given AST node
-        void generate(const std::shared_ptr<ASTNode>& ast);
+        void generate(const std::shared_ptr<Pragram>& ast);
     private:
         std::unique_ptr<X86AssemblyCode> assemblyCode; // Pointer to AssemblyCode object to hold generated code
         
@@ -139,8 +139,8 @@ class GenCode {
             assemblyCode->cgfuncpreamble(name);
         }
 
-        void cgfuncpostamble() {
-            assemblyCode->cgfuncpostamble();
+        void cgfuncpostamble(const char *label) {
+            assemblyCode->cgfuncpostamble(label);
         }
 
         Reg cgint2char(Reg reg) {
@@ -187,10 +187,15 @@ class GenCode {
         void cgprintfloat(Reg reg) {
             return assemblyCode->cgprintfloat(reg);
         }
-        Reg walkAST(const std::shared_ptr<ASTNode>& ast);
+        Reg cgcall(const char *name, const Reg reg) {
+            return assemblyCode->cgcall(name, reg);
+        }
+        Reg walkPragram(const std::shared_ptr<Pragram>& ast);
         Reg walkStatement(const std::shared_ptr<StatementNode>& ast);
         Reg walkExpr(const std::shared_ptr<ExprNode>& ast);
         void walkCondition(const std::shared_ptr<ExprNode>& ast, std::string false_label);
         void walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast);
+        Reg walkFunctionCall(const std::shared_ptr<FunctionCallNode>& ast);
+        void walkReturn(const std::shared_ptr<ReturnStatementNode>& ast);
         Reg transformType(PrimitiveType type, PrimitiveType target_type, Reg reg);
 };

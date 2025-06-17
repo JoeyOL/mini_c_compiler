@@ -65,35 +65,46 @@ class BinaryExpNode : public ExprNode {
             // std::cout << " Result: " << value.toString() << std::endl;
         }
 
-        void updateType() {
+        void updateCalType() {
 
-            // Update the type based on the left and right expressions
-            if (left->getType() == right->getType() ) {
-                type = left->getType(); // If both types are the same, use that type
-                return;
-            }
+            // // Update the type based on the left and right expressions
+            // if (left->getType() == right->getType() ) {
+            //     type = left->getType(); // If both types are the same, use that type
+            //     return;
+            // }
             if (left->getType() == P_FLOAT || right->getType() == P_FLOAT) {
-                type = P_FLOAT;
+                cal_type = P_FLOAT;
             } else if (left->getType() == P_LONG || right->getType() == P_LONG) {
-                type = P_LONG; // If either is long, the result is long
+                cal_type = P_LONG; // If either is long, the result is long
             } else if (left->getType() == P_INT || right->getType() == P_INT) {
-                type = P_INT;
+                cal_type = P_INT;
                 if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
-                    type = P_LONG; // Comparison operations return an integer type
+                    cal_type = P_LONG; // Comparison operations return an integer type
                     return;
                 }
             } else if (left->getType() == P_CHAR || right->getType() == P_CHAR) {
-                type = P_CHAR; // If either is char, the result is char
+                cal_type = P_CHAR; // If either is char, the result is char
                 if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
-                    type = P_LONG; // Comparison operations return an integer type
+                    cal_type = P_LONG; // Comparison operations return an integer type
                     return;
                 }
             } 
+        }
 
-
+        void updateTypeAfterCal() {
+            if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
+                type = P_LONG; // Comparison operations return an integer type
+            }
+            else {
+                type = cal_type;
+            }
+        }
+        PrimitiveType getCalType() const {
+            return cal_type; // Return the calculated type
         }
     private:
         ExprType op;
+        PrimitiveType cal_type;
         std::shared_ptr<ExprNode> left;
         std::shared_ptr<ExprNode> right;
 };

@@ -47,7 +47,7 @@ public:
     virtual void cglessthanjump(Reg r1, Reg r2, const char *label) = 0;
     virtual void cggreaterthanjump(Reg r1, Reg r2, const char *label) = 0;
     virtual void cgfuncpreamble(const char *name) = 0;
-    virtual void cgfuncpostamble() = 0;
+    virtual void cgfuncpostamble(const char *label) = 0;
     virtual Reg cgint2char(Reg reg) = 0;
     virtual Reg cgchar2int(Reg reg) = 0;
     virtual Reg cgfloat2int(Reg reg) = 0;
@@ -60,5 +60,7 @@ public:
     virtual Reg cglong2float(Reg reg) = 0;
     virtual Reg cglong2char(Reg reg) = 0;
     virtual Reg cgchar2long(Reg reg) = 0;
+    virtual Reg cgcall(const char *name, const Reg reg) = 0;
+    virtual void cgreturn(Reg reg, const char *end_label) = 0;
 };
 

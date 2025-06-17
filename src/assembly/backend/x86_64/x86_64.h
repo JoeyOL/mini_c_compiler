@@ -91,6 +91,11 @@ class X86RegisterManager: public RegisterManager {
             }
             return registers[reg.idx];
         }
+        
+        std::string getRegisterLower8bit(Reg reg) const {
+            reg.type = P_CHAR; // Treat as char for lower 8-bit register
+            return getRegister(reg);
+        }
 
     private:
         std::map<PrimitiveType, std::vector<std::string>> type_to_registers;
@@ -98,7 +103,7 @@ class X86RegisterManager: public RegisterManager {
         const std::vector<std::string> registers_int = { "%r8d", "%r9d", "%r10d", "%r11d" };
         const std::vector<std::string> registers_char = { "%r8b", "%r9b", "%r10b", "%r11b" };
         const std::vector<std::string> registers_long = { "%r8", "%r9", "%r10", "%r11" }; // Long registers for 64-bit operations
-        const std::vector<std::string> registers_float = { "%xmm0", "%xmm1", "%xmm2", "%xmm3" }; // Floating-point registers
+        const std::vector<std::string> registers_float = { "%xmm1", "%xmm2", "%xmm3", "%xmm4" }; // Floating-point registers
 };
 
 
@@ -221,7 +226,7 @@ public:
                 throw std::runtime_error("GenCode::cgmul: Unsupported register type for multiplication");
         }
 
-        return reg2; // Return the register containing the result
+        return reg1; // Return the register containing the result
     }
 
     Reg cgdiv(Reg reg1, Reg reg2) override {
@@ -242,10 +247,7 @@ public:
                 reg1.type = type; // Restore the original type
                 break;
             case P_FLOAT:
-                outputFile << "\tmovsd\t" << regManager->getRegister(reg1) << ", %xmm4\n"; // Move reg1 to xmm0
-                outputFile << "\tmovsd\t" << regManager->getRegister(reg2) << ", %xmm5\n"; // Move reg2 to xmm1
-                outputFile << "\tdivsd\t%xmm4, %xmm5\n"; // Divide xmm0 by xmm1
-                outputFile << "\tmovsd\t%xmm4, " << regManager->getRegister(reg1) << "\n"; // Move result back to reg1
+                outputFile << "\tdivsd\t" << regManager->getRegister(reg2) << "," << regManager->getRegister(reg1) << "\n"; // Divide xmm0 by xmm1
                 regManager->freeRegister(reg2);
                 break;
         }
@@ -262,40 +264,56 @@ public:
 
     void cgprintfloat(Reg reg) override {
         // Print the floating-point value in the specified register
-        outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm4\n"; // Move value to xmm0
+        outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n"; // Move value to xmm0
         outputFile << "\tcall\tprintfloat\n";
         regManager->freeRegister(reg); // Free the register after use
     }
 
     void cgpreamble() override {
         regManager->freeAllRegister(); // Free all registers at the start
-        outputFile<< "\t.text\n"
-          ".LC0:\n"
-          "\t.string\t\"%d\\n\"\n"
-          "printint:\n"
-          "\tpushq\t%rbp\n"
-          "\tmovq\t%rsp, %rbp\n"
-          "\tsubq\t$16, %rsp\n"
-          "\tmovl\t%edi, -4(%rbp)\n"
-          "\tmovl\t-4(%rbp), %eax\n"
-          "\tmovl\t%eax, %esi\n"
-          "\tleaq	.LC0(%rip), %rdi\n"
-          "\tmovl	$0, %eax\n"
-          "\tcall	printf@PLT\n" "\tnop\n" "\tleave\n" "\tret\n" "\n"
-          ".LC1:\n"
-          "\t.string\t\"%f\\n\"\n"
-          "printfloat:\n"
-          "\tpushq\t%rbp\n"
-          "\tmovq\t%rsp, %rbp\n"
-          "\tsubq\t$16, %rsp\n"
-          "\tmovsd\t%xmm4, -8(%rbp)\n"
-          "\tmovsd\t-8(%rbp), %xmm4\n"
-          "\tleaq\t.LC1(%rip), %rdi\n"
-          "\tmovl\t$1, %eax\n"
-          "\tcall\tprintf@PLT\n"
-          "\tnop\n"
-          "\tleave\n"
-          "\tret\n";
+        // outputFile<< "\t.text\n"
+        //     ".LC0:\n"
+        //     "\t.string\t\"%d\\n\"\n"
+        //     "printint:\n"
+        //     "\tpushq\t%rbp\n"
+        //     "\tmovq\t%rsp, %rbp\n"
+        //     "\tsubq\t$16, %rsp\n"
+        //     "\tmovl\t%edi, -4(%rbp)\n"
+        //     "\tmovl\t-4(%rbp), %eax\n"
+        //     "\tmovl\t%eax, %esi\n"
+        //     "\tleaq	.LC0(%rip), %rdi\n"
+        //     "\tmovl	$0, %eax\n"
+        //     "\tcall	printf@PLT\n" "\tnop\n" "\tleave\n" "\tret\n" "\n"
+        //     ".LC1:\n"
+        //     "\t.string\t\"%f\\n\"\n"
+        //     "printfloat:\n"
+        //     "\tpushq\t%rbp\n"
+        //     "\tmovq\t%rsp, %rbp\n"
+        //     "\tsubq\t$16, %rsp\n"
+        //     "\tmovsd\t%xmm0, -8(%rbp)\n"
+        //     "\tmovsd\t-8(%rbp), %xmm0\n"
+        //     "\tleaq\t.LC1(%rip), %rdi\n"
+        //     "\tmovl\t$1, %eax\n"
+        //     "\tcall\tprintf@PLT\n"
+        //     "\tnop\n"
+        //     "\tleave\n"
+        //     "\tret\n"
+        //     ".LC2:\n"
+        //     "\t.string\t\"%ld\\n\"\n"
+        //     "printlong:\n"
+        //     "\tpushq\t%rbp\n"
+        //     "\tmovq\t%rsp, %rbp\n"
+        //     "\tsubq\t$16, %rsp\n"
+        //     "\tmovq\t%rdi, -8(%rbp)\n"
+        //     "\tmovq\t-8(%rbp), %rax\n"
+        //     "\tmovq\t%rax, %xmm0\n"
+        //     "\tmovl\t$2, %eax\n"
+        //     "\tmovq\t.LC2(%rip), %rsi\n"
+        //     "\tmovq\t%rax, %rdi\n"
+        //     "\tcall\tprintf@PLT\n"
+        //     "\tnop\n"
+        //     "\tleave\n"
+        //     "\tret\n";
       }
 
     void cgpostamble() override {
@@ -375,8 +393,8 @@ public:
 
                 outputFile <<
                     "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
-                    "\t" << op << "\t" << regManager->getRegister(r2) << "\n"
-                    "\tmovzbq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r2) << "\n"; 
+                    "\t" << op << "\t" << regManager->getRegisterLower8bit(r2) << "\n"
+                    "\tmovzbq\t" << regManager->getRegisterLower8bit(r2) << ", " << regManager->getRegister(r2) << "\n"; 
                 regManager->freeRegister(r1);
                 return r2; // Return the register containing the result
 
@@ -385,8 +403,8 @@ public:
                 r3 = regManager->allocateRegister(P_LONG); // Allocate a new register for the result
                 outputFile <<
                     "\tcmpq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
-                    "\t" << op << "\t" << regManager->getRegister(r3) << "\n"
-                    "\tmovzbq\t" << regManager->getRegister(r3) << ", " << regManager->getRegister(r3) << "\n"; 
+                    "\t" << op << "\t" << regManager->getRegisterLower8bit(r3) << "\n"
+                    "\tmovzbq\t" << regManager->getRegisterLower8bit(r3) << ", " << regManager->getRegister(r3) << "\n"; 
                 regManager->freeRegister(r1);
                 regManager->freeRegister(r2);
                 return r3; // Return the register containing the result
@@ -395,8 +413,8 @@ public:
                 r3 = regManager->allocateRegister(P_LONG);
                 outputFile << 
                     "\tucomisd\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"
-                    "\t" << op << "\t%al" << "\n"
-                    << "\tmovzbq\t%al, " << r3.idx << "\n";
+                    "\t" << op << "\t" << regManager->getRegisterLower8bit(r3)  << "\n"
+                    << "\tmovzbq "<< "\t" << regManager->getRegisterLower8bit(r3) << ", " << regManager->getRegister(r3) << "\n";
                 regManager->freeRegister(r1);
                 regManager->freeRegister(r2);
                 return r3; // Return the register containing the result
@@ -415,26 +433,30 @@ public:
     }
 
     Reg cggreaterthan(Reg r1, Reg r2) override {
-        return cgcompare(r1, r2, "setg");
+        if (r1.type != P_FLOAT) return cgcompare(r1, r2, "setg");
+        else return cgcompare(r1, r2, "seta");
     }
 
     Reg cglessthan(Reg r1, Reg r2) override {
-        return cgcompare(r1, r2, "setl");
+        if (r1.type != P_FLOAT) return cgcompare(r1, r2, "setl");
+        else return cgcompare(r1, r2, "setb");
     }
 
     Reg cggreaterequal(Reg r1, Reg r2) override {
-        return cgcompare(r1, r2, "setge");
+        if (r1.type != P_FLOAT) return cgcompare(r1, r2, "setge");
+        else return cgcompare(r1, r2, "setae");
     }
 
     Reg cglessequal(Reg r1, Reg r2) override {
-        return cgcompare(r1, r2, "setle");
+        if (r1.type != P_FLOAT) return cgcompare(r1, r2, "setle");
+        else return cgcompare(r1, r2, "setbe");
     }
 
     Reg cgnot(Reg r1) override {
-        if (r1.type == P_INT) {
-            r1 = cgfloat2int(r1);
+        if (r1.type == P_FLOAT) {
+            r1 = cgfloat2long(r1);
         }
-        Reg r2 = cgload(Value{ .type = P_INT, .ivalue = 0}); // Allocate a new register for the result
+        Reg r2 = cgload(Value{ .type = P_LONG, .ivalue = 0}); // Allocate a new register for the result
         return cgcompare(r1, r2, "sete");
     }
 
@@ -529,9 +551,9 @@ public:
             "\tmovq\t%rsp, %rbp\n";
     }
 
-    void cgfuncpostamble() override {
+    void cgfuncpostamble(const char *label) override {
+        cglabel(label);
         outputFile << 
-            "\tmovl\t$0, %eax\n" // Return 0
             "\tpopq\t%rbp\n"
             "\tret\n";
         // regManager->freeAllRegister(); // Free all registers at the end of the function
@@ -617,6 +639,46 @@ public:
         reg.type = P_LONG; // Update the register type to long
         outputFile << regManager->getRegister(reg) << "\n"; // Zero-extend to long
         return reg; // Return the register containing the long
+    }
+
+    Reg cgcall(const char *name, const Reg reg) {
+        if (reg.idx != -1) {
+            if (reg.type != P_FLOAT) {
+                Reg r1 = Reg{.type = P_LONG, .idx = reg.idx}; // Create a temporary register for the function call
+                outputFile << "\tmovq\t" << regManager->getRegister(r1) << ", %rdi\n"; // Move the register value to rdi for the function call
+            } else {
+                outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n"; // Move the float value to xmm0 for the function call
+            }
+        }
+        Reg out = regManager->allocateRegister(reg.type);
+        Reg r1 = Reg{.type = P_LONG, .idx = out.idx}; // Create a temporary register for the function call
+        outputFile << "\tcall\t" << name << "\n"; // Call the specified function
+        if (reg.type == P_FLOAT) {
+            outputFile << "\tmovsd\t%xmm0, " << regManager->getRegister(out) << "\n";
+
+        }
+        else outputFile << "\tmovq\t%rax, " << regManager->getRegister(r1) << "\n";
+        if (reg.idx != -1) regManager->freeRegister(reg); // Free the original register after the call
+        return out;
+    }
+
+    void cgreturn(const Reg reg, const char *end_label) {
+        switch (reg.type) {
+            case P_CHAR:
+                outputFile << "\tmovb\t" << regManager->getRegister(reg) << ", %eax\n";
+                break;
+            case P_INT:
+                outputFile << "\tmovl\t" << regManager->getRegister(reg) << ", %eax\n";
+                break;
+            case P_LONG:
+                outputFile << "\tmovq\t" << regManager->getRegister(reg) << ", %rax\n";
+                break;
+            case P_FLOAT:
+                outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n";
+                break;
+        }
+        regManager->freeRegister(reg); // Free the register after use
+        cgjump(end_label);
     }
 
 private:

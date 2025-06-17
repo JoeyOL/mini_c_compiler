@@ -118,12 +118,11 @@ class VariableDeclareNode : public StatementNode {
         std::map<std::string, std::shared_ptr<ExprNode>> initializers;
 };
 
-class AssignmentNode : public StatementNode, public ExprNode {
+class AssignmentNode : public ExprNode {
     public:
         AssignmentNode(Symbol identifier, std::shared_ptr<ExprNode> expr) 
             : identifier(std::move(identifier)), expression(std::move(expr)) {
-            stmt_type= S_ASSIGN; // Set the statement type to assignment
-            ExprNode::type = identifier.type; // Set the type of the assignment to the identifier's type
+            type = identifier.type; // Set the type of the assignment to the identifier's type
         }
         void walk(std::string prefix) override {
             std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = " << std::endl;
@@ -135,12 +134,6 @@ class AssignmentNode : public StatementNode, public ExprNode {
         }
         std::shared_ptr<ExprNode> getExpr() const {
             return expression; // Return the expression being assigned
-        }
-        PrimitiveType getType() const override {
-            return ExprNode::type; // Return the type of the expression node
-        }
-        bool & isNeedTransform() override {
-            return ExprNode::need_transform; // Return whether the assignment needs transformation
         }
     private:
         Symbol identifier; // Identifier for the variable being assigned
@@ -260,10 +253,32 @@ class FunctionDeclareNode : public  StatementNode {
             type = P_NONE;
         }
 
+        FunctionDeclareNode(std::string identifier, TokenType return_type, std::shared_ptr<BlockNode> body) {
+            this->stmt_type = S_FUNCTDEF; // Set the statement type to variable declaration
+            this->body = std::move(body);
+            this->identifier = std::move(identifier);
+            if (return_type == T_INT) {
+                this->return_type = P_INT; // Set the return type to int
+            } else if (return_type == T_FLOAT) {
+                this->return_type = P_FLOAT; // Set the return type to float
+            } else if (return_type == T_CHAR) {
+                this->return_type = P_CHAR; // Set the return type to char
+            } else if (return_type == T_LONG) {
+                this->return_type = P_LONG;
+            } else if (return_type == T_VOID) {
+                this->return_type = P_VOID; // Set the return type to void
+            } else {
+                throw std::runtime_error("FunctionDeclareNode: Unknown token type for function declaration");
+            }
+            this->type = P_NONE; // Set the type of the function declaration to void    
+        }
+
         std::string convertTypeToString(PrimitiveType type) const {
             switch (type) {
                 case P_INT: return "int";
                 case P_FLOAT: return "float";
+                case P_CHAR: return "char";
+                case P_LONG: return "long";
                 case P_VOID: return "void";
                 default: return "unknown";
             }
@@ -291,4 +306,95 @@ class FunctionDeclareNode : public  StatementNode {
         std::string identifier;
         PrimitiveType return_type;
         std::shared_ptr<BlockNode> body;
+};
+
+
+class FunctionCallNode : public ExprNode {
+    public:
+        FunctionCallNode(std::string identifier, std::vector<std::shared_ptr<ExprNode>> args, PrimitiveType return_type)
+            : identifier(std::move(identifier)), args(std::move(args)) {
+            type = return_type; // Set the type of the function call to void
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Function Call: " << identifier << std::endl;
+            for (const auto& arg : args) {
+                arg->walk(prefix + "\t"); // Walk each argument of the function call
+            }
+        }
+
+        std::string getIdentifier() const {
+            return identifier; // Return the function identifier
+        }
+
+        std::vector<std::shared_ptr<ExprNode>> getArguments() const {
+            return args; // Return the list of arguments for the function call
+        }
+
+    private:
+        std::string identifier; // Identifier for the function being called
+        std::vector<std::shared_ptr<ExprNode>> args; // Arguments for the function call
+};
+
+// 不考虑出现由于控制流导致不return的情况
+class ReturnStatementNode : public StatementNode {
+    public:
+        ReturnStatementNode(std::shared_ptr<ExprNode> expr) : expression(std::move(expr)) {
+            stmt_type = S_RETURN; // Set the statement type to return
+            type = P_NONE; // Set the type of the return statement to void
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Return Statement: " << std::endl;
+            if (expression) {
+                expression->walk(prefix + "\t"); // Walk the expression being returned
+            } else {
+                std::cout << prettyPrint(prefix + "\t") << "No expression to return." << std::endl;
+            }
+        }
+
+        std::shared_ptr<ExprNode> getExpression() const {
+            return expression; // Return the expression being returned
+        }
+
+        void setFunction(Function func) {
+            this->func = std::move(func); // Set the function associated with the return statement
+            type = func.return_type; // Set the type of the return statement to the function's return type
+        }
+        Function getFunction() const {
+            return func; // Return the function associated with the return statement
+        }
+    private:
+        std::shared_ptr<ExprNode> expression; // Expression to return
+        Function func;
+};
+
+class Pragram: public ASTNode {
+    public:
+        Pragram() = default;
+        ~Pragram() = default;
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Program Node :" << std::endl;
+            for (const auto& global_var: global_vars) {
+                global_var->walk(prefix + "\t"); // Walk each statement
+            }
+            for (const auto& func : functions) {
+                func->walk(prefix + "\t"); // Walk each function
+            }
+        }
+        void addGlobalVariable(std::shared_ptr<VariableDeclareNode> var) {
+            global_vars.push_back(std::move(var)); // Add a new global variable
+        }
+        void addFunction(std::shared_ptr<FunctionDeclareNode> func) {
+            functions.push_back(std::move(func)); // Add a new function
+        }
+        std::vector<std::shared_ptr<VariableDeclareNode>> getGlobalVariables() const {
+            return global_vars; // Return the list of global variables
+        }
+        std::vector<std::shared_ptr<FunctionDeclareNode>> getFunctions() const {
+            return functions; // Return the list of functions
+        }
+    private:
+        std::vector<std::shared_ptr<VariableDeclareNode>> global_vars; // List of statements in the program
+        std::vector<std::shared_ptr<FunctionDeclareNode>> functions; // List of functions in the program
 };

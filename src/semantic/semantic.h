@@ -4,7 +4,7 @@
 
 class Semantic {
 public:
-    Semantic(std::shared_ptr<ASTNode> ast) : ast(ast) {}
+    Semantic(std::shared_ptr<Pragram> ast) : ast(ast) {}
     void check();
     void checkAssignment(std::shared_ptr<AssignmentNode> node);
     void checkBlock(std::shared_ptr<BlockNode> node);
@@ -16,7 +16,8 @@ public:
     void checkWhileStatement(std::shared_ptr<WhileStatementNode> node);
     void checkForStatement(std::shared_ptr<ForStatementNode> node);
     void checkStatement(std::shared_ptr<StatementNode> node);
+    void checkReturnStatement(std::shared_ptr<ReturnStatementNode> node);
 private:
-    std::shared_ptr<ASTNode> ast;
+    std::shared_ptr<Pragram> ast;
     bool typeCompatible(PrimitiveType type1, PrimitiveType type2, bool &need_transform);
 };

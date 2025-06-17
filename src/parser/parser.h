@@ -109,6 +109,9 @@ public:
 
     // function_declaration: 'void' identifier '(' ')' compound_statement   ;
     std::shared_ptr<FunctionDeclareNode> parseFunctionDeclare();
+    std::shared_ptr<FunctionCallNode> parseFunctionCall();
+    std::shared_ptr<ReturnStatementNode> parseReturnStatement();
+    std::shared_ptr<Pragram> parsePragram();
 
 private:
     std::vector<Token> &toks;
@@ -118,9 +121,9 @@ private:
     Token consume() {
         return toks[current++];
     }
-    Token peek() const {
-        if (current < toks.size()) {
-            return toks[current];
+    Token peek(int i = 0) const {
+        if (current + i < toks.size()) {
+            return toks[current + i];
         }
         return Token{T_EOF, Value{}, -1, -1}; // Return EOF token if out of bounds
     }
@@ -129,6 +132,9 @@ private:
         if (current > 0) {
             --current; // Move back one token
         }
+    }
+    bool token_end() {
+        return current >= toks.size();
     }
     // Additional private methods for parsing would go here.
     // For example, methods to parse terms, factors, etc.

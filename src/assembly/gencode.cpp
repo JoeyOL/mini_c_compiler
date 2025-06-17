@@ -41,26 +41,30 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         // Handle binary expression node
         Reg reg1 = walkExpr(x->getLeft());
         if (x->getLeft()->isNeedTransform()) {
-           reg1 = transformType(x->getLeft()->getType(), x->getType(), reg1);
+           reg1 = transformType(x->getLeft()->getType(), x->getCalType(), reg1);
         }
         Reg reg2 = walkExpr(x->getRight());
         if (x->getRight()->isNeedTransform()) {
-           reg2 = transformType(x->getRight()->getType(), x->getType(), reg2);
+           reg2 = transformType(x->getRight()->getType(), x->getCalType(), reg2);
         }
+        
+        Reg ret;
         switch (x->getOp()) {
             case A_ADD: return cgadd(reg1, reg2); // Add the two registers and return the result
             case A_SUBTRACT: return cgsub(reg1, reg2); // Subtract the two registers and return the result
             case A_MULTIPLY: return cgmul(reg1, reg2); // Multiply the two registers and return the result
             case A_DIVIDE: return cgdiv(reg1, reg2); // Divide the two registers and return the result
-            case A_EQ: return cgequal(reg1, reg2);
-            case A_NE: return cgnotequal(reg1, reg2);
-            case A_LT: return cglessthan(reg1, reg2);
-            case A_LE: return cglessequal(reg1, reg2);
-            case A_GT: return cggreaterthan(reg1, reg2);
-            case A_GE: return cggreaterequal(reg1, reg2);
+            case A_EQ: ret = cgequal(reg1, reg2); break;
+            case A_NE: ret = cgnotequal(reg1, reg2); break;
+            case A_LT: ret = cglessthan(reg1, reg2); break;
+            case A_LE: ret = cglessequal(reg1, reg2); break;
+            case A_GT: ret = cggreaterthan(reg1, reg2); break;
+            case A_GE: ret = cggreaterequal(reg1, reg2); break;
             default:
                 throw std::runtime_error("GenCode::generate: Unknown binary expression type");
         }
+        ret.type = P_LONG;
+        return ret;
     } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(ast)) {
         Reg reg = walkExpr(x->getExpr()); // Walk the expression in the unary node
         // Handle unary expression node
@@ -87,6 +91,8 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         cgstorglob(reg, x->getIdentifier().name.c_str(), x->getIdentifier().type); // Store the value in the global variable
         return reg; // Return the register containing the result
 
+    } else if (auto x = std::dynamic_pointer_cast<FunctionCallNode>(ast)) {
+        return walkFunctionCall(x);
     } else {
         throw std::runtime_error("GenCode::generate: Unknown expression node type");
     }
@@ -120,7 +126,7 @@ void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string fa
         return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
     } else {
         Reg reg1 = walkExpr(ast); // Walk the expression in the condition
-        Reg reg2 = cgload(Value{ .type = P_INT, .ivalue = 0 }); // Load zero into a register
+        Reg reg2 = cgload(Value{ .type = P_LONG, .ivalue = 0 }); // Load zero into a register
         return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
     }
 }
@@ -129,7 +135,8 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
     if (auto x = std::dynamic_pointer_cast<BlockNode>(ast)) {
         std::string block_label = labelAllocator.getLabel(LableType::BLOCK_LABEL);
         cglabel(block_label.c_str()); // Generate a label for the block
-        for (const auto& stmt : x->getStatements()) {
+        auto stmts = x->getStatements();
+        for (const auto& stmt : stmts) {
             walkStatement(stmt); // Walk each statement in the statements node
         }
         return Reg{.type = P_NONE, .idx = 0};
@@ -155,14 +162,6 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
                 assemblyCode->freereg(reg);
             }
         }
-        return Reg{.type = P_NONE, .idx = 0};
-    } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(ast)) {
-        Reg reg = walkExpr(x->getExpr());
-        if (x->isNeedTransform()) {
-            reg = transformType(x->getExpr()->getType(), x->getIdentifier().type, reg); // Transform the type if needed
-        }
-        cgstorglob(reg, x->getIdentifier().name.c_str(), x->getIdentifier().type); // Store the value in the global variable
-        assemblyCode->freereg(reg); // Free the register after use
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<IfStatementNode>(ast)) {
         // 目前只考虑都是Block
@@ -207,6 +206,14 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         cgjump(for_start.c_str()); // Jump back to the start of the loop
         cglabel(for_end.c_str()); // Generate the end label for the for loop
         return Reg{.type = P_NONE, .idx = 0};
+    } else if (auto x = std::dynamic_pointer_cast<ExprNode>(ast)) {
+        // Handle expression node
+        Reg reg = walkExpr(x); // Walk the expression node to generate code
+        assemblyCode->freereg(reg); // Free the register after use
+        return Reg{.type = P_NONE, .idx = 0};
+    } else if (auto x = std::dynamic_pointer_cast<ReturnStatementNode>(ast)) {
+        walkReturn(x);
+        return Reg{.type = P_NONE, .idx = 0};
     } else {
         throw std::runtime_error("GenCode::generate: Unknown statement node type");
     }
@@ -216,23 +223,52 @@ void GenCode::walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast) {
     std::string func_name = ast->getIdentifier();
     cgfuncpreamble(func_name.c_str()); // Generate function preamble code
     walkStatement(ast->getBody()); // Walk the function body to generate code
-    cgfuncpostamble();
-
+    cgfuncpostamble((func_name + "_end").c_str()); // Generate function postamble code
 }
 
-Reg GenCode::walkAST(const std::shared_ptr<ASTNode>& ast) {
-    if (auto x = std::dynamic_pointer_cast<VariableDeclareNode>(ast)) {
-        return walkStatement(x);
-    } if (auto x = std::dynamic_pointer_cast<FunctionDeclareNode>(ast)) {
-        walkFunction(x);
-        return Reg{ .type = P_NONE, .idx = 0 }; // Return a void register for function declarations
-    } else {
-        throw std::runtime_error("GenCode::generate: Unknown AST node type");
+Reg GenCode::walkPragram(const std::shared_ptr<Pragram>& ast) {
+    for (const auto &x: ast->getGlobalVariables()) {
+        walkStatement(x); // Walk each global variable declaration to generate code
+    } 
+    for (const auto &x: ast->getFunctions()) {
+        walkFunction(x); // Walk each function to generate code
     }
+    return Reg{.type = P_NONE, .idx = 0}; // Return a dummy register for now
 }
 
-void GenCode::generate(const std::shared_ptr<ASTNode>& ast) {
+void GenCode::generate(const std::shared_ptr<Pragram>& ast) {
     cgpreamble(); // Generate preamble code
-    assert(walkAST(ast).type == P_NONE); // Walk the AST to generate code
+    assert(walkPragram(ast).type == P_NONE); // Walk the AST to generate code
     // cgpostamble(); // Generate postamble code
+}
+
+// 目前只考虑无参数或者一个参数调用
+Reg GenCode::walkFunctionCall(const std::shared_ptr<FunctionCallNode>& ast) {
+    auto args = ast->getArguments();
+    if (args.size() > 1) {
+        throw std::runtime_error("GenCode::walkFunctionCall: Function calls with more than one argument are not supported yet");
+    }
+    Function func = symbol_table.getFunction(ast->getIdentifier()); // Get the function from the symbol table
+    Reg reg = Reg{.type = func.return_type, .idx = -1};
+    if (args.size() == 1) {
+        // 暂时也不考虑类型转换
+        reg = walkExpr(args[0]); // Walk the argument expression to generate code
+    } 
+    reg = cgcall(ast->getIdentifier().c_str(), reg); // Call the function with the argument
+
+    return reg; // Return a dummy register for now
+    // return cgcall(ast->getIdentifier().name.c_str(), args); // Call the function with the arguments
+}
+
+void GenCode::walkReturn(const std::shared_ptr<ReturnStatementNode>& ast) {
+    const char* end_label = (ast->getFunction().name + "_end").c_str();
+    if (ast->getExpression() != nullptr) {
+        Reg reg = walkExpr(ast->getExpression()); // Walk the return expression to generate code
+        if (ast->isNeedTransform()) {
+            reg = transformType(ast->getExpression()->getType(), ast->getType(), reg); // Transform the type if needed
+        }
+        assemblyCode->cgreturn(reg, end_label); // Generate return code with the register
+    } else {
+        assemblyCode->cgreturn(Reg{.type = P_VOID, .idx = 0}, end_label); // Generate return code without a value
+    }
 }

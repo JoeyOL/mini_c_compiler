@@ -14,6 +14,7 @@ enum LableType {
     BLOCK_LABEL,
     WHILE_LABEL,
     FOR_LABEL,
+    FUNCT_LABEL,
 };
 
 class LabelAllocator {
@@ -27,11 +28,14 @@ public:
             return std::to_string(whileLabelCounter++);
         } else if (l == FOR_LABEL) {
             return std::to_string(forLabelCounter++);
+        } else if (l == FUNCT_LABEL) {
+            return "FUNCT_END" + std::to_string(functLabelCounter++);
         }
     }
 private:
     int ifLabelCounter = 0;
     int blockLabelCounter = 0;
+    int functLabelCounter = 0; // Counter for function labels
     int whileLabelCounter = 0;
     int forLabelCounter = 0;
 };
@@ -40,7 +44,7 @@ static LabelAllocator labelAllocator; // Static label allocator for generating u
 
 enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE,
-    T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR,
+    T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR, T_RETURN,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID, T_CHAR, T_FLOAT, T_LONG,
     T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_AND, T_OR
 };
@@ -50,7 +54,8 @@ enum PrimitiveType {
 };
 
 enum StmtType {
-    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR, S_FUNCTDEF
+    S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR, S_FUNCTDEF,
+    S_FUNCTCALL
 };
 
 enum ExprType {
@@ -71,8 +76,22 @@ struct Symbol {
     }
 };
 
+struct Function {
+    std::string name;
+    PrimitiveType return_type;
+    bool has_return;
+};
+
 struct SymbolTable {
     std::vector<Symbol> symbols;
+    std::vector<Function> functions;
+    Function current_function; // Current function being processed
+    SymbolTable() {
+        addFunction("printint", P_VOID); // Add built-in function for printing integers
+        addFunction("printfloat", P_VOID); // Add built-in function for printing floats
+        addFunction("printchar", P_VOID); // Add built-in function for printing characters
+        addFunction("printlong", P_VOID); // Add built-in function for printing long integers
+    };
 
     int typeToSize(PrimitiveType type) const {
         switch (type) {
@@ -100,6 +119,32 @@ struct SymbolTable {
             }
         }
         throw std::runtime_error("SymbolTable::getSymbol: Symbol not found: " + name);
+    }
+
+    void addFunction(std::string name, PrimitiveType return_type) {
+        for (const auto& func : functions) {
+            if (func.name == name) {
+                throw std::runtime_error("SymbolTable::addFunction: Function already exists: " + name);
+            }
+        }
+        functions.push_back({name, return_type, false});
+    }
+    Function getFunction(std::string name) {
+        for (const auto& func : functions) {
+            if (func.name == name) {
+                return func; // Return the found function
+            }
+        }
+        throw std::runtime_error("SymbolTable::getFunction: Function not found: " + name);
+    }
+    void setCurrentFunction(const Function& func) {
+        current_function = func; // Set the current function being processed
+    }
+    Function getCurrentFunction() const {
+        return current_function; // Get the current function being processed
+    }
+    void setCurrentFunctionReturn(bool has_return) {
+        current_function.has_return = has_return; // Set whether the current function has a return statement
     }
 };
 
@@ -244,19 +289,6 @@ class ASTNode {
 
 };
 
-class ExprNode: public ASTNode {
-    public:
-        ExprNode() = default;
-        ~ExprNode() = default;
-        // virtual ExprType getType() const = 0; // Pure virtual function to get the expression type
-        // virtual std::string convertTypeToString() const = 0; // Convert expression type to string
-        Value getValue() {
-            return value; // Return the value of the expression node
-        }
-    protected:
-        Value value; 
-};
-
 class StatementNode : public ASTNode {
     public:
         StatementNode() = default;
@@ -267,6 +299,23 @@ class StatementNode : public ASTNode {
     protected:
         StmtType stmt_type; // Type of the statement
 };
+
+class ExprNode: public StatementNode {
+    public:
+        ExprNode() {
+            stmt_type = S_EXPR;
+        };
+        ~ExprNode() = default;
+        // virtual ExprType getType() const = 0; // Pure virtual function to get the expression type
+        // virtual std::string convertTypeToString() const = 0; // Convert expression type to string
+        Value getValue() {
+            return value; // Return the value of the expression node
+        }
+    protected:
+        Value value; 
+};
+
+
 
 class ValueNode : public ExprNode {
     public:

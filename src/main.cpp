@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
 
         Parser parser = Parser(tokens);
         // std::shared_ptr<ASTNode> ast = parser.parseBinaryExpression();
-        std::shared_ptr<ASTNode> ast = parser.parseFunctionDeclare();
+        std::shared_ptr<Pragram> ast = parser.parsePragram();
         // std::shared_ptr<ASTNode> ast = parser.parseAdditiveExpression();
         std::cout << "Parsed AST successfully." << std::endl;
         ast->walk(""); // Walk the AST to print the structure and values

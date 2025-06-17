@@ -1,5 +1,26 @@
 #include "parser/parser.h"
 
+// 假设只能声明全局变量，不能在函数体外更改全局变量值
+std::shared_ptr<Pragram> Parser::parsePragram() {
+    auto ret = std::make_shared<Pragram>();
+    while (!token_end()) {
+        assert(peek().type == T_INT || peek().type == T_FLOAT || 
+               peek().type == T_CHAR || peek().type == T_LONG || 
+               peek().type == T_VOID);
+        if (peek().type == T_VOID) {
+            auto func = parseFunctionDeclare();
+            ret->addFunction(func);
+        } else if (peek(2).type != T_LPAREN) {
+            auto var = parseVariableDeclare();
+            assert(consume().type == T_SEMI); // Expect a semicolon after variable declaration
+            ret->addGlobalVariable(var);
+        } else {
+            auto func = parseFunctionDeclare();
+            ret->addFunction(func);
+        }
+    }
+    return ret;
+}
 
 std::shared_ptr<ExprNode> Parser::parseBinaryExpression() {
     std::shared_ptr<ExprNode> left = parimary();
@@ -30,9 +51,13 @@ std::shared_ptr<ExprNode> Parser::parimary() {
         if (peek().type == T_ASSIGN) {
             putback(); // Put back the identifier token
             return parseAssignment();
+        } else if (peek().type == T_LPAREN) {
+            putback(); // Put back the identifier token
+            return parseFunctionCall();
+        } else {
+            Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
+            return std::make_shared<LValueNode>(sym);
         }
-        Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
-        return std::make_shared<LValueNode>(sym);
     } else {
         throw std::runtime_error("Parser::parimary: Unexpected token type" + 
             std::to_string(tok.type) + " at line " + 
@@ -126,9 +151,10 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
             assert(consume().type == T_SEMI);
             stmts->addStatement(var_decl);
         } else if (peek().type == T_IDENTIFIER) {
-            std::shared_ptr<AssignmentNode> assign_stmt = parseAssignment();
+            std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
             assert(consume().type == T_SEMI);
-            stmts->addStatement(assign_stmt);
+            stmts->addStatement(expr);
+
         } else if (peek().type == T_LBRACE) {
             std::shared_ptr<BlockNode> block = parseBlock();
             stmts->addStatement(block);
@@ -143,6 +169,10 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
         } else if (peek().type == T_FOR) {
             std::shared_ptr<ForStatementNode> for_stmt = parseForStatement();
             stmts->addStatement(for_stmt);
+        } else if (peek().type == T_RETURN) {
+            std::shared_ptr<ReturnStatementNode> return_stmt = parseReturnStatement();
+            assert(consume().type == T_SEMI);
+            stmts->addStatement(return_stmt);
         } else {
             throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
                 std::to_string(peek().line_no) + ", column " + 
@@ -217,20 +247,18 @@ std::shared_ptr<WhileStatementNode> Parser::parseWhileStatement() {
     return std::make_shared<WhileStatementNode>(std::move(condition), std::move(body));
 }
 
+// 要么是声明，要么是表达式
 std::shared_ptr<StatementNode> Parser::parseSingleStatement() {
-    if (peek().type == T_PRINT) {
-        return parsePrintStatement();
-    } else if (peek().type == T_INT) {
+    if (peek().type == T_INT || peek().type == T_CHAR ||
+        peek().type == T_FLOAT || peek().type == T_LONG) {
         return parseVariableDeclare();
     } else if (peek().type == T_IDENTIFIER) {
-        return parseAssignment();
-    } else if (peek().type == T_IF) {
-        return parseIfStatement();
-    } else if (peek().type == T_WHILE) {
-        return parseWhileStatement();
-    } else {
-        return nullptr;
-    }
+        return parseExpressionWithPrecedence(0);
+    } else if (peek().type == T_SEMI) return nullptr;
+
+    throw std::runtime_error("Parser::parseSingleStatement: Expected single statement at line " + 
+        std::to_string(peek().line_no) + ", column " + 
+        std::to_string(peek().column_no));
 }
 
 
@@ -250,7 +278,8 @@ std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
 
 // TODO: 目前只支持void类型的无参数函数
 std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
-    assert(consume().type == T_VOID);
+    assert(peek().type == T_VOID || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG || peek().type == T_INT);
+    TokenType return_type = consume().type; // Get the return type of the function
     if (current >= toks.size() || peek().type != T_IDENTIFIER) {
         throw std::runtime_error("Parser::parseFunctionDeclare: Expected function name at line " + 
             std::to_string(peek().line_no) + ", column " + 
@@ -260,5 +289,48 @@ std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
     assert(consume().type == T_LPAREN);
     assert(consume().type == T_RPAREN);
     std::shared_ptr<BlockNode> body = parseBlock();
-    return std::make_shared<FunctionDeclareNode>(func_name, P_VOID, std::move(body));
+    auto ret = std::make_shared<FunctionDeclareNode>(func_name, return_type, std::move(body));
+    symbol_table.addFunction(func_name, ret->getReturnType()); // Add the function to the symbol table
+    return ret;
+}
+
+std::shared_ptr<FunctionCallNode> Parser::parseFunctionCall() {
+    if (current >= toks.size() || peek().type != T_IDENTIFIER) {
+        throw std::runtime_error("Parser::parseFunctionCall: Expected function name at line " + 
+            std::to_string(peek().line_no) + ", column " + 
+            std::to_string(peek().column_no));
+    }
+    std::string func_name = consume().value.strvalue;
+    if (peek().type != T_LPAREN) {
+        throw std::runtime_error("Parser::parseFunctionCall: Expected '(' after function name at line " + 
+            std::to_string(peek().line_no) + ", column " + 
+            std::to_string(peek().column_no));
+    }
+    consume(); // Skip '('
+    Function func = symbol_table.getFunction(func_name); // Check if the function exists in the symbol table
+    std::vector<std::shared_ptr<ExprNode>> args;
+    if (peek().type != T_RPAREN) { // If there are arguments
+        do {
+            std::shared_ptr<ExprNode> arg = parseExpressionWithPrecedence(0);
+            args.push_back(std::move(arg));
+            if (peek().type == T_COMMA) {
+                consume(); // Skip ','
+            } else if (peek().type != T_RPAREN) {
+                throw std::runtime_error("Parser::parseFunctionCall: Expected ',' or ')' at line " + 
+                    std::to_string(peek().line_no) + ", column " + 
+                    std::to_string(peek().column_no));
+            }
+        } while (peek().type != T_RPAREN);
+    }
+    assert(consume().type == T_RPAREN); // Skip ')'
+    return std::make_shared<FunctionCallNode>(func_name, std::move(args), func.return_type);
+}
+
+std::shared_ptr<ReturnStatementNode> Parser::parseReturnStatement() {
+    assert(consume().type == T_RETURN);
+    std::shared_ptr<ExprNode> return_value = nullptr;
+    if (peek().type != T_SEMI) { // If there is a return value
+        return_value = parseExpressionWithPrecedence(0);
+    }
+    return std::make_shared<ReturnStatementNode>(std::move(return_value));
 }
