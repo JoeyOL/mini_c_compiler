@@ -33,6 +33,7 @@ class BinaryExpNode : public ExprNode {
                 {A_GE, "Greater Than or Equal"},
                 {A_AND, "And"},
                 {A_OR, "Or"},
+                {A_ASSIGN, "Assignment"}
             };
             auto it = typeToString.find(op);
             if (it != typeToString.end()) {
@@ -230,19 +231,23 @@ class FunctionCallNode : public ExprNode {
 
 class AssignmentNode : public ExprNode {
     public:
-        AssignmentNode(Symbol identifier, std::shared_ptr<ExprNode> expr) 
-            : identifier(std::move(identifier)), expression(std::move(expr)) {
-            type = identifier.type; // Set the type of the assignment to the identifier's type
+        AssignmentNode(std::shared_ptr<ExprNode> lvalue, std::shared_ptr<ExprNode> expr) 
+            : lvalue(std::move(lvalue)), expression(std::move(expr)) {
+            type = this->lvalue->getCalculateType(); // Set the type of the assignment to the identifier's type
         }
         void walk(std::string prefix) override {
-            std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = " << std::endl;
+            std::cout << prettyPrint(prefix) << "Assignment Statement: "<< std::endl;
+            lvalue->walk(prefix + "\t"); // Walk the expression being assigned
             expression->walk(prefix + "\t"); // Walk the expression node
         }
 
-        Symbol getIdentifier() const {
-            return identifier; // Return the identifier being assigned to
+        std::shared_ptr<ExprNode> getLvalue() const {
+            return lvalue;
         }
 
+        void setType(PrimitiveType type) {
+            this->type = type; // Set the type of the assignment node
+        }
 
         std::shared_ptr<ExprNode> getExpr() const {
             return expression; // Return the expression being assigned
@@ -250,7 +255,9 @@ class AssignmentNode : public ExprNode {
         void setExpr(std::shared_ptr<ExprNode> expr) {
             expression = std::move(expr); // Set the expression being assigned
         }   
+
     private:
-        Symbol identifier; // Identifier for the variable being assigned
+
+        std::shared_ptr<ExprNode> lvalue;
         std::shared_ptr<ExprNode> expression; // Expression to assign to the variable
 };

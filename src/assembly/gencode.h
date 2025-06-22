@@ -202,6 +202,9 @@ class GenCode {
         void cglocalsym(Symbol sym) {
             assemblyCode->cglocalsym(sym);
         }
+        Reg cgstorderef(Reg reg, Reg addr, PrimitiveType type) {
+            return assemblyCode->cgstorderef(reg, addr, type);
+        }
         Reg walkPragram(const std::shared_ptr<Pragram>& ast);
         Reg walkStatement(const std::shared_ptr<StatementNode>& ast);
         Reg walkExpr(const std::shared_ptr<ExprNode>& ast);

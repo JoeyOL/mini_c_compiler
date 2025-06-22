@@ -10,13 +10,14 @@ void Semantic::check() {
 }
 
 void Semantic::checkAssignment(std::shared_ptr<AssignmentNode> node) {
-    Symbol identifier = node->getIdentifier();
+    std::shared_ptr<ExprNode> lvalue = node->getLvalue();
+    checkExpression(lvalue);
     checkExpression(node->getExpr());
-    if (!assignCompatible(identifier.type, node->getExpr()->getPrimitiveType(), node->isNeedTransform())) {
-        throw std::runtime_error("Semantic::checkAssignment: Type mismatch for assignment to " + identifier.name);
+    if (!assignCompatible(lvalue->getPrimitiveType(), node->getExpr()->getPrimitiveType(), node->isNeedTransform())) {
+        throw std::runtime_error("Semantic::checkAssignment: Type mismatch for assignment");
     }
     if (node->isNeedTransform()) {
-        node->setExpr(std::make_shared<UnaryExpNode>(U_TRANSFORM, node->getExpr(), identifier.type));
+        node->setExpr(std::make_shared<UnaryExpNode>(U_TRANSFORM, node->getExpr(), node->getPrimitiveType()));
     }
 }
 

@@ -80,7 +80,7 @@ enum StmtType {
 
 enum ExprType {
     A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
-    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE, A_AND, A_OR
+    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE, A_AND, A_OR, A_ASSIGN
 };
 
 enum UnaryOp {
@@ -360,6 +360,13 @@ class ExprNode: public StatementNode {
             }
             return type_to_offset.at(this->type); // Get the offset for the expression node
         }
+        void setLValue(bool lvalue) {
+            this->lvalue = lvalue; // Set whether the expression node is an lvalue
+        }
+
+        bool isLValue() const {
+            return lvalue; // Return whether the expression node is an lvalue
+        }
     protected:
         Value value; 
         int offset;
@@ -374,6 +381,7 @@ class ExprNode: public StatementNode {
             {P_LONGPTR, 8},
             {P_VOIDPTR, 0}
         };
+        bool lvalue = false; // Flag to indicate if the expression is an lvalue
 };
 
 

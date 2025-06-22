@@ -105,7 +105,14 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
     } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(ast)) {
         // Handle assignment node
         Reg reg = walkExpr(x->getExpr()); // Walk the expression in the assignment node
-        cgstorglob(reg, x->getIdentifier().name.c_str(), x->getCalculateType()); // Store the value in the global variable
+
+        if (auto y = std::dynamic_pointer_cast<LValueNode>(x->getLvalue())) {
+            cgstorglob(reg, y->getIdentifier().name.c_str(), x->getCalculateType());
+        } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(x->getLvalue())) {
+            Reg addr = walkExpr(y->getExpr()); // Walk the expression in the unary node
+            cgstorderef(reg, addr, x->getPrimitiveType());
+
+        }
         return reg; // Return the register containing the result
 
     } else if (auto x = std::dynamic_pointer_cast<FunctionCallNode>(ast)) {

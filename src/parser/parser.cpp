@@ -66,20 +66,22 @@ std::shared_ptr<ExprNode> Parser::prefixExpr() {
             consume(); // Consume all consecutive '*' tokens
         }
         // 解引用符号 '*'后面必须接一个变量
-        auto primary_node = parimary();
-        if (auto x = std::dynamic_pointer_cast<LValueNode>(primary_node)) {
-            // 获取指针类型
-            PrimitiveType type = x->getPrimitiveType();
-            while (star_count-- > 0) {
-                type = valueAt(type);
-            }
-            std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_DEREF, primary_node, type);
-            return unary_node;
+        std::shared_ptr<ExprNode> primary_node;
+        if (peek().type == T_LPAREN) {
+            consume(); // Consume the '(' token
+            primary_node = parseExpressionWithPrecedence(0);
+            assert(consume().type == T_RPAREN); // Expect a closing parenthesis
         } else {
-            throw std::runtime_error("Parser::prefixExpr: Expected lvalue after '&' at line " + 
-                std::to_string(tok.line_no) + ", column " + 
-                std::to_string(tok.column_no));
+            primary_node = parimary();
         }
+        // 获取指针类型
+        PrimitiveType type = primary_node->getPrimitiveType();
+        while (star_count-- > 0) {
+            type = valueAt(type);
+        }
+        std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_DEREF, primary_node, type);
+        return unary_node;
+        
 
     } else {
         return parimary(); // If no prefix operator, just parse the primary expression
@@ -103,10 +105,7 @@ std::shared_ptr<ExprNode> Parser::parimary() {
     } else if (tok.type == T_NUMBER) {
         return std::make_shared<ValueNode>(tok.value);
     } else if (tok.type == T_IDENTIFIER) {
-        if (peek().type == T_ASSIGN) {
-            putback(); // Put back the identifier token
-            return parseAssignment();
-        } else if (peek().type == T_LPAREN) {
+        if (peek().type == T_LPAREN) {
             putback(); // Put back the identifier token
             return parseFunctionCall();
         } else {
@@ -148,12 +147,32 @@ std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precede
     if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI || peek().type == T_COMMA) {
         return left; // If no token is available, return the left node
     }
-    while (precedence.at(arithop(peek())) > prev_precedence) {
-        ExprType type = arithop(consume());
-        std::shared_ptr<ExprNode> right = parseExpressionWithPrecedence(precedence.at(type));
-        left = std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
-        if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI) {
-            return left; // If no token is available, return the left node
+    while (peek().type == T_ASSIGN || precedence.at(arithop(peek())) > prev_precedence) {
+        if (peek().type == T_ASSIGN) {
+            consume();
+            std::shared_ptr<ExprNode> right = parseExpressionWithPrecedence(0);
+            std::shared_ptr<AssignmentNode> ret;
+            if (auto lvalue_node = std::dynamic_pointer_cast<LValueNode>(left)) {
+                // If left is an lvalue, create an assignment node
+                ret = std::make_shared<AssignmentNode>(lvalue_node, std::move(right));
+            } else if (auto unary_node = std::dynamic_pointer_cast<UnaryExpNode>(left)) {
+                // If left is a unary expression, it should be an lvalue
+                // 只支持 *(p+1) = expr 这种形式
+                assert(unary_node->getOp() == U_DEREF);
+                ret = std::make_shared<AssignmentNode>(unary_node, std::move(right));
+                ret->setType(unary_node->getPrimitiveType()); // Set the type of the assignment node
+            }
+            return ret; // Return the assignment node
+        } else {
+            ExprType type = arithop(consume());
+            std::shared_ptr<ExprNode> right = parseExpressionWithPrecedence(precedence.at(type));
+            auto ret= std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
+            ret->updateTypeAfterCal();
+            if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI) {
+                return ret; // If no token is available, return the left node
+            }
+            left = std::move(ret); // Update left to the new binary expression node
+            
         }
     }
     return left;
@@ -205,7 +224,7 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
             std::shared_ptr<VariableDeclareNode> var_decl = parseVariableDeclare();
             assert(consume().type == T_SEMI);
             stmts->addStatement(var_decl);
-        } else if (peek().type == T_IDENTIFIER) {
+        } else if (peek().type == T_IDENTIFIER || peek().type == T_STAR) {
             std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
             assert(consume().type == T_SEMI);
             stmts->addStatement(expr);
@@ -283,7 +302,7 @@ std::shared_ptr<AssignmentNode> Parser::parseAssignment() {
     Symbol sym = symbol_table.getSymbol(identifier); // Check if the identifier exists in the symbol table
     assert(consume().type == T_ASSIGN); // Skip the '=' token
     std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
-    return std::shared_ptr<AssignmentNode>(new AssignmentNode(sym, std::move(expr)));
+    return std::shared_ptr<AssignmentNode>(new AssignmentNode(std::make_shared<LValueNode>(sym), std::move(expr)));
 }
 
 std::shared_ptr<IfStatementNode> Parser::parseIfStatement() {
@@ -316,9 +335,12 @@ std::shared_ptr<StatementNode> Parser::parseSingleStatement() {
     if (peek().type == T_INT || peek().type == T_CHAR ||
         peek().type == T_FLOAT || peek().type == T_LONG) {
         return parseVariableDeclare();
-    } else if (peek().type == T_IDENTIFIER) {
-        return parseExpressionWithPrecedence(0);
-    } else if (peek().type == T_SEMI) return nullptr;
+    } else if (peek().type == T_SEMI) { 
+        return nullptr;
+    } else {
+        return parseExpressionWithPrecedence(0); // Parse as an expression
+    }
+
 
     throw std::runtime_error("Parser::parseSingleStatement: Expected single statement at line " + 
         std::to_string(peek().line_no) + ", column " + 

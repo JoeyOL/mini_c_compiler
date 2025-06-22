@@ -761,6 +761,24 @@ public:
         }
         return reg; // Return the register containing the shifted value
     }
+    
+
+    Reg cgstorderef(Reg reg, Reg addr, PrimitiveType type) override {
+        // Store the value in the specified register to the address pointed by identifier
+        if (type == P_INT) {
+            outputFile << "\tmovl\t" << regManager->getRegister(reg) << ", (" << regManager->getRegister(addr) << ")\n"; // Store int value
+        } else if (type == P_CHAR) {
+            outputFile << "\tmovb\t" << regManager->getRegister(reg) << ", (" << regManager->getRegister(addr) << ")\n"; // Store char value
+        } else if (type == P_FLOAT) {
+            outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", (" << regManager->getRegister(addr) << ")\n"; // Store float value
+        } else if (type == P_LONG) {
+            outputFile << "\tmovq\t" << regManager->getRegister(reg) << ", (" << regManager->getRegister(addr) << ")\n"; // Store long value
+        } else {
+            throw std::runtime_error("GenCode::cgstorderef: Unsupported type for storing dereferenced value");
+        }
+        regManager->freeRegister(addr); // Free the address register after use
+        return reg; // Return the register containing the stored value
+    }
 
 private:
     std::unique_ptr<X86RegisterManager> regManager; // Register manager for handling register allocation

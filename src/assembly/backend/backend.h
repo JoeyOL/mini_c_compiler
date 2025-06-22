@@ -66,6 +66,7 @@ public:
     virtual Reg cgaddress(const char *identifier) = 0;
     virtual Reg cgderef(Reg reg, PrimitiveType type) = 0;
     virtual Reg cgshlconst(Reg reg, int value) = 0;
+    virtual Reg cgstorderef(Reg reg, Reg addr, PrimitiveType type) = 0;
     
 };
 
