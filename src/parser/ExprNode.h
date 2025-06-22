@@ -4,6 +4,11 @@
 #include <map>
 #pragma once
 
+// 考虑指针加减法的offset问题，首先最终一定是先遍历到一个指针叶节点，然后往传递这个信息，直到遇到解引用操作，会更新offset，
+// 那么下面实现一种方法，在每一个ExprNode中添加一个offset字段，表示当前节点的偏移量，然后在进行加减法时，需要乘上这个offset
+// 这个操作称之为对齐，A_SCALE，并且限制在一个Expr中，只允许ptr和int、char、long等类型进行加减法操作，
+// 这样可以避免指针和指针之间的加减法操作，以及指针和float之间的加减法操作，
+
 class BinaryExpNode : public ExprNode {
     public:
         BinaryExpNode(ExprType op, std::shared_ptr<ExprNode> left, std::shared_ptr<ExprNode> right)
@@ -42,47 +47,24 @@ class BinaryExpNode : public ExprNode {
             std::cout << prettyPrint(prefix) << "Binary Expr, Op "<< convertTypeToString() <<" :" << std::endl;
             left->walk(prefix + "\t");
             right->walk(prefix + "\t");
-            // switch (type) {
-            //     case A_ADD:
-            //         value = left->getValue() + right->getValue();
-            //         break;
-            //     case A_SUBTRACT:
-            //         value = left->getValue() - right->getValue();
-            //         break;
-            //     case A_MULTIPLY:
-            //         value = left->getValue() * right->getValue();
-            //         break;
-            //     case A_DIVIDE:
-            //         if (right->getValue() == Value{P_INT, .ivalue = 0} 
-            //             || right->getValue() == Value{P_FLOAT, .fvalue = 0.0}) {
-            //             throw std::runtime_error("Division by zero error");
-            //         }
-            //         value = left->getValue() / right->getValue();
-            //         break;
-            //     default:
-            //         throw std::runtime_error("Unknown binary expression type");
-            // }
-            // std::cout << " Result: " << value.toString() << std::endl;
         }
 
         void updateCalType() {
 
-            // // Update the type based on the left and right expressions
-            // if (left->getType() == right->getType() ) {
-            //     type = left->getType(); // If both types are the same, use that type
-            //     return;
-            // }
-            if (left->getType() == P_FLOAT || right->getType() == P_FLOAT) {
+            PrimitiveType left_type = left->getCalculateType();
+            PrimitiveType right_type = right->getCalculateType();
+
+            if (left_type== P_FLOAT || right_type == P_FLOAT) {
                 cal_type = P_FLOAT;
-            } else if (left->getType() == P_LONG || right->getType() == P_LONG) {
+            } else if (left_type == P_LONG || right_type == P_LONG) {
                 cal_type = P_LONG; // If either is long, the result is long
-            } else if (left->getType() == P_INT || right->getType() == P_INT) {
+            } else if (left_type == P_INT || right_type == P_INT) {
                 cal_type = P_INT;
                 if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
                     cal_type = P_LONG; // Comparison operations return an integer type
                     return;
                 }
-            } else if (left->getType() == P_CHAR || right->getType() == P_CHAR) {
+            } else if (left_type == P_CHAR || right_type == P_CHAR) {
                 cal_type = P_CHAR; // If either is char, the result is char
                 if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
                     cal_type = P_LONG; // Comparison operations return an integer type
@@ -95,12 +77,22 @@ class BinaryExpNode : public ExprNode {
             if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
                 type = P_LONG; // Comparison operations return an integer type
             }
-            else {
-                type = cal_type;
+            else if (is_pointer(left->getPrimitiveType()) || is_pointer(right->getPrimitiveType())) {
+                // 表达式中不允许出现两个指针类型的操作数
+                type = is_pointer(left->getPrimitiveType()) ? left->getPrimitiveType() : right->getPrimitiveType();
+            } else {
+                type = cal_type; // Otherwise, use the calculated type
             }
         }
         PrimitiveType getCalType() const {
             return cal_type; // Return the calculated type
+        }
+
+        void setRight(std::shared_ptr<ExprNode> right) {
+            this->right = std::move(right); // Set the right operand of the binary expression
+        }
+        void setLeft(std::shared_ptr<ExprNode> left) {
+            this->left = std::move(left); // Set the left operand of the binary expression
         }
     private:
         ExprType op;
@@ -112,8 +104,8 @@ class BinaryExpNode : public ExprNode {
 
 class UnaryExpNode : public ExprNode {
     public:
-        UnaryExpNode(UnaryOp op, std::shared_ptr<ExprNode> expr): op(op), expr(std::move(expr)) {
-            type = P_NONE;
+        UnaryExpNode(UnaryOp op, std::shared_ptr<ExprNode> expr, PrimitiveType type): op(op), expr(std::move(expr)) {
+            this->type = type;
         }
         UnaryExpNode(TokenType tok, std::shared_ptr<ExprNode> expr) {
             if (tok == T_PLUS) {
@@ -137,6 +129,25 @@ class UnaryExpNode : public ExprNode {
                     return "Minus";
                 case U_NOT:
                     return "Not";
+                case U_ADDR:
+                    return "Address of";
+                case U_DEREF:
+                    return "Dereference";
+                case U_TRANSFORM:
+                    if (type == P_INT) {
+                        return "Transform, Target Type: int";
+                    } else if (type == P_FLOAT) {
+                        return "Transform, Target Type: float";
+                    } else if (type == P_CHAR) {
+                        return "Transform, Target Type: char";
+                    } else if (type == P_LONG) {
+                        return "Transform, Target Type: long";
+                    } else if (type == P_VOID) {
+                        return "Transform, Target Type: void";
+                    }
+                    return "Transform, Target Type: " + std::to_string(type);
+                case U_SCALE:
+                    return "Scale, Offset: " + std::to_string(getOffset());
                 default:
                     return "Unknown Unary Type";
             }
@@ -153,7 +164,7 @@ class UnaryExpNode : public ExprNode {
             // }
         }
         void updateType() {
-            type = expr->getType();
+            if (op != U_TRANSFORM && op != U_ADDR && op != U_DEREF) type = expr->getPrimitiveType();
         }
     private:
         UnaryOp op;
@@ -165,11 +176,81 @@ class LValueNode : public ExprNode {
         LValueNode(Symbol identifier) : identifier(std::move(identifier)) {
             type = identifier.type;
         }
+        std::string convertTypeToString() const {
+            switch (type) {
+                case P_INT: return "int";
+                case P_FLOAT: return "float";
+                case P_CHAR: return "char";
+                case P_LONG: return "long";
+                case P_VOID: return "void";
+                case P_INTPTR: return "int*";
+                case P_FLOATPTR: return "float*";
+                case P_CHARPTR: return "char*";
+                case P_LONGPTR: return "long*";
+                case P_VOIDPTR: return "void*";
+                default: return "unknown";
+            }
+        }
         Symbol getIdentifier() const { return identifier; }
         void walk(std::string prefix) override {
             // Implement the walk method to print the identifier
-            std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier.name << std::endl;
+            std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier.name << ", Type: " << convertTypeToString() << std::endl;
         }
     private:
         Symbol identifier;
+};
+
+
+class FunctionCallNode : public ExprNode {
+    public:
+        FunctionCallNode(std::string identifier, std::vector<std::shared_ptr<ExprNode>> args, PrimitiveType return_type)
+            : identifier(std::move(identifier)), args(std::move(args)) {
+            type = return_type; // Set the type of the function call to void
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Function Call: " << identifier << std::endl;
+            for (const auto& arg : args) {
+                arg->walk(prefix + "\t"); // Walk each argument of the function call
+            }
+        }
+
+        std::string getIdentifier() const {
+            return identifier; // Return the function identifier
+        }
+
+        std::vector<std::shared_ptr<ExprNode>> getArguments() const {
+            return args; // Return the list of arguments for the function call
+        }
+
+    private:
+        std::string identifier; // Identifier for the function being called
+        std::vector<std::shared_ptr<ExprNode>> args; // Arguments for the function call
+};
+
+class AssignmentNode : public ExprNode {
+    public:
+        AssignmentNode(Symbol identifier, std::shared_ptr<ExprNode> expr) 
+            : identifier(std::move(identifier)), expression(std::move(expr)) {
+            type = identifier.type; // Set the type of the assignment to the identifier's type
+        }
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = " << std::endl;
+            expression->walk(prefix + "\t"); // Walk the expression node
+        }
+
+        Symbol getIdentifier() const {
+            return identifier; // Return the identifier being assigned to
+        }
+
+
+        std::shared_ptr<ExprNode> getExpr() const {
+            return expression; // Return the expression being assigned
+        }
+        void setExpr(std::shared_ptr<ExprNode> expr) {
+            expression = std::move(expr); // Set the expression being assigned
+        }   
+    private:
+        Symbol identifier; // Identifier for the variable being assigned
+        std::shared_ptr<ExprNode> expression; // Expression to assign to the variable
 };

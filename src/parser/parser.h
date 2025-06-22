@@ -117,6 +117,7 @@ private:
     std::vector<Token> &toks;
     size_t current = 0;
     std::shared_ptr<ExprNode> parimary();
+    std::shared_ptr<ExprNode> prefixExpr();
     ExprType arithop(const Token &tok);
     Token consume() {
         return toks[current++];

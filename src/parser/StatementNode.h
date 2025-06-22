@@ -43,8 +43,9 @@ class PrintStatementNode : public StatementNode {
         std::shared_ptr<ExprNode> getExpression() const {
             return expression; // Return the expression to print
         }
-        void setType(PrimitiveType type) {
-            this->type = type; // Set the type of the expression node
+
+        void setExpression(std::shared_ptr<ExprNode> expr) {
+            expression = std::move(expr); // Set the expression to print
         }
     private:
         std::shared_ptr<ExprNode> expression; // Expression to print
@@ -71,12 +72,22 @@ class VariableDeclareNode : public StatementNode {
                 throw std::runtime_error("VariableDeclareNode: Unknown token type for variable declaration");
             }
         }
+        void setVariableType(PrimitiveType type) {
+            this->var_type = type; // Set the variable type
+        }
 
         std::string convertTypeToString(PrimitiveType type) const {
             switch (type) {
                 case P_INT: return "int";
                 case P_FLOAT: return "float";
                 case P_CHAR: return "char";
+                case P_LONG: return "long";
+                case P_VOID: return "void";
+                case P_INTPTR: return "int*";
+                case P_FLOATPTR: return "float*";
+                case P_CHARPTR: return "char*";
+                case P_LONGPTR: return "long*";
+                case P_VOIDPTR: return "void*";
                 default: return "unknown";
             }
         }
@@ -87,6 +98,14 @@ class VariableDeclareNode : public StatementNode {
                 std::cout << identifier << ", ";
             }
             std::cout << std::endl;
+            for (const auto& [identifier, initializer] : initializers) {
+                std::cout << prettyPrint(prefix + "\t") << "Initializer for " << identifier << ": ";
+                if (initializer) {
+                    initializer->walk(prefix + "\t\t"); // Walk the initializer expression
+                } else {
+                    std::cout << "No initializer" << std::endl; // No initializer provided
+                }
+            }
         }
 
         void addIdentifier(std::string identifier) {
@@ -96,6 +115,10 @@ class VariableDeclareNode : public StatementNode {
         void addIdentifier(std::string identifier, std::shared_ptr<ExprNode> initializer) {
             identifiers.push_back(identifier); // Add a new identifier
             initializers[identifier] = std::move(initializer); // Add the initializer for the identifier
+        }
+
+        void setInitializer(std::string identifier, std::shared_ptr<ExprNode> initializer) {
+            initializers[identifier] = std::move(initializer); // Set the initializer for the identifier
         }
 
         std::vector<std::string> getIdentifiers() const {
@@ -114,31 +137,12 @@ class VariableDeclareNode : public StatementNode {
 
     private:
         PrimitiveType var_type;
+        int star_count; // 指针类型
         std::vector<std::string> identifiers;
         std::map<std::string, std::shared_ptr<ExprNode>> initializers;
 };
 
-class AssignmentNode : public ExprNode {
-    public:
-        AssignmentNode(Symbol identifier, std::shared_ptr<ExprNode> expr) 
-            : identifier(std::move(identifier)), expression(std::move(expr)) {
-            type = identifier.type; // Set the type of the assignment to the identifier's type
-        }
-        void walk(std::string prefix) override {
-            std::cout << prettyPrint(prefix) << "Assignment Statement: " << identifier.name << " = " << std::endl;
-            expression->walk(prefix + "\t"); // Walk the expression node
-        }
 
-        Symbol getIdentifier() const {
-            return identifier; // Return the identifier being assigned to
-        }
-        std::shared_ptr<ExprNode> getExpr() const {
-            return expression; // Return the expression being assigned
-        }
-    private:
-        Symbol identifier; // Identifier for the variable being assigned
-        std::shared_ptr<ExprNode> expression; // Expression to assign to the variable
-};
 
 
 class IfStatementNode : public StatementNode {
@@ -309,32 +313,7 @@ class FunctionDeclareNode : public  StatementNode {
 };
 
 
-class FunctionCallNode : public ExprNode {
-    public:
-        FunctionCallNode(std::string identifier, std::vector<std::shared_ptr<ExprNode>> args, PrimitiveType return_type)
-            : identifier(std::move(identifier)), args(std::move(args)) {
-            type = return_type; // Set the type of the function call to void
-        }
 
-        void walk(std::string prefix) override {
-            std::cout << prettyPrint(prefix) << "Function Call: " << identifier << std::endl;
-            for (const auto& arg : args) {
-                arg->walk(prefix + "\t"); // Walk each argument of the function call
-            }
-        }
-
-        std::string getIdentifier() const {
-            return identifier; // Return the function identifier
-        }
-
-        std::vector<std::shared_ptr<ExprNode>> getArguments() const {
-            return args; // Return the list of arguments for the function call
-        }
-
-    private:
-        std::string identifier; // Identifier for the function being called
-        std::vector<std::shared_ptr<ExprNode>> args; // Arguments for the function call
-};
 
 // 不考虑出现由于控制流导致不return的情况
 class ReturnStatementNode : public StatementNode {
@@ -363,6 +342,9 @@ class ReturnStatementNode : public StatementNode {
         }
         Function getFunction() const {
             return func; // Return the function associated with the return statement
+        }
+        void setExpression(std::shared_ptr<ExprNode> expr) {
+            expression = std::move(expr); // Set the expression being returned
         }
     private:
         std::shared_ptr<ExprNode> expression; // Expression to return

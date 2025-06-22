@@ -119,12 +119,16 @@ public:
     Reg cgload(Value value) override {
         // Load the value into a register and return the register index
         Reg reg = regManager->allocateRegister(value.type);
-        if (value.type == P_INT || value.type == P_CHAR || value.type == P_LONG) {
-            reg.type = P_LONG;
-            outputFile << "\tmovq\t$" << value.ivalue << ", " << regManager->getRegister(reg) << "\n";
+        if (value.type == P_INT) {
+            reg.type = P_INT;
+            outputFile << "\tmovl\t$" << value.ivalue << ", " << regManager->getRegister(reg) << "\n";
             reg.type = value.type; // Restore the original type
         } else if (value.type == P_FLOAT) {
-            outputFile << "\tmovsd\t$" << value.fvalue << ", " << regManager->getRegister(reg) << "\n";
+            outputFile << "\tmovsd\t" << float_constants[value.fvalue] << "(%rip)" << ", " << regManager->getRegister(reg) << "\n";
+        } else if (value.type == P_LONG) {
+            reg.type = P_LONG;
+            outputFile << "\tmovq\t$" << value.lvalue << ", " << regManager->getRegister(reg) << "\n";
+            reg.type = value.type; // Restore the original type
         } else {
             throw std::runtime_error("GenCode::cgload: Only Support int value type for loading into register");
         }
@@ -269,7 +273,15 @@ public:
         regManager->freeRegister(reg); // Free the register after use
     }
 
+    void cgfloatconst() {
+        outputFile << ".section\t.data\n";
+        for (auto & [value, name] : float_constants) {
+            outputFile << name << ":\n";
+            outputFile << "\t.double\t" << value << "\n"; // Store float as int
+        }
+    }
     void cgpreamble() override {
+        cgfloatconst(); // Generate float constants section
         regManager->freeAllRegister(); // Free all registers at the start
         // outputFile<< "\t.text\n"
         //     ".LC0:\n"
@@ -325,6 +337,7 @@ public:
     }
 
     Reg cgloadglob(const char *identifier, PrimitiveType type) override {
+        if (is_pointer(type)) type = P_LONG; // Treat pointers as long for loading
         // Load the value of the global variable into a register
         Reg reg = regManager->allocateRegister(type);
 
@@ -352,6 +365,7 @@ public:
     }
 
     Reg cgstorglob(Reg r, const char *identifier, PrimitiveType type) override {
+        type = is_pointer(type) ? P_LONG : type; // Treat pointers as long for storing
         if (type == P_INT) {
             outputFile <<
             "\tmovl\t" << regManager->getRegister(r) << ", " << identifier << "(%rip)\n";
@@ -374,11 +388,35 @@ public:
 
     }
 
-    void cgglobsym(Symbol sym) override {
+    void cglocalsym(Symbol sym) override {
         outputFile <<
             "\t.comm\t" << sym.name << "," << sym.size << "," << sym.size << "\n"; // Declare a global symbol
     }
 
+    void cgglobsym(Symbol sym) override {
+        outputFile <<
+            "\t.data\n\t.globl\t" <<sym.name << "\n" << sym.name << ":\t" ; // Declare a global symbol
+        switch (sym.type) {
+            case P_INT:
+                outputFile << "\t.long\t0\n"; // Initialize int global variable to 0
+                break;
+            case P_CHAR:
+                outputFile << "\t.byte\t0\n"; // Initialize char global variable to 0
+                break;
+            case P_FLOAT:
+                outputFile << "\t.double\t0.0\n"; // Initialize float global variable to 0.0
+                break;
+            case P_LONG:
+                outputFile << "\t.quad\t0\n"; // Initialize long global variable to 0
+                break;
+            case P_INTPTR : case P_FLOATPTR : case P_CHARPTR : case P_LONGPTR : case P_VOIDPTR:
+                outputFile << "\t.quad\t0\n"; // Initialize pointer global variable to 0
+                break;
+            default:
+                throw std::runtime_error("GenCode::cgglobsym: Unsupported type for global symbol");
+        }
+        outputFile << "\t.text\n"; // Switch back to text section for code
+    }
     void freereg(Reg reg) override {
         regManager->freeRegister(reg); // Free the specified register
     }
@@ -641,7 +679,7 @@ public:
         return reg; // Return the register containing the long
     }
 
-    Reg cgcall(const char *name, const Reg reg) {
+    Reg cgcall(const char *name, const Reg reg) override {
         if (reg.idx != -1) {
             if (reg.type != P_FLOAT) {
                 Reg r1 = Reg{.type = P_LONG, .idx = reg.idx}; // Create a temporary register for the function call
@@ -662,7 +700,7 @@ public:
         return out;
     }
 
-    void cgreturn(const Reg reg, const char *end_label) {
+    void cgreturn(const Reg reg, const char *end_label) override {
         switch (reg.type) {
             case P_CHAR:
                 outputFile << "\tmovb\t" << regManager->getRegister(reg) << ", %eax\n";
@@ -679,6 +717,49 @@ public:
         }
         regManager->freeRegister(reg); // Free the register after use
         cgjump(end_label);
+    }
+
+    Reg cgaddress(const char *identifier) override {
+        Reg reg = regManager->allocateRegister(P_LONG); // Allocate a register for the address
+        outputFile << "\tleaq\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n"; // Load the address into the register
+        return reg; // Return the register containing the address
+    }
+
+    Reg cgderef(Reg reg, PrimitiveType type) override {
+        Reg float_reg;
+        switch (type) {
+            case P_INTPTR:
+                outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the value at the address in reg to eax
+                reg.type = P_INT; // Update the register type to int
+                break;
+            case P_CHARPTR:
+                outputFile << "\tmovzbq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the byte at the address in reg to al
+                reg.type = P_CHAR; // Update the register type to char
+                break;
+            case P_FLOATPTR:
+                float_reg = regManager->allocateRegister(P_FLOAT); // Allocate a new register for the float value
+                outputFile << "\tmovsd\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(float_reg) << "\n";; // Move the double at the address in reg to xmm0
+                regManager->freeRegister(reg); // Free the original register
+                reg = float_reg;// Update the register type to float
+                break;
+            case P_LONGPTR:
+                outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the value at the address in reg to rax
+                reg.type = P_LONG; // Update the register type to long
+                break;
+            default:
+                throw std::runtime_error("GenCode::cgderef: Unsupported type for dereferencing");
+        }
+        return reg; // Return the register containing the dereferenced value
+    }
+
+    Reg cgshlconst(Reg reg, int value) override {
+        // Shift the value in the specified register left by the given constant
+        if (reg.type == P_INT || reg.type == P_LONG || reg.type == P_CHAR) {
+            outputFile << "\tsalq\t$" << value << ", " << regManager->getRegister(reg) << "\n"; // Shift left
+        } else {
+            throw std::runtime_error("GenCode::cgshlconst: Unsupported register type for shift left");
+        }
+        return reg; // Return the register containing the shifted value
     }
 
 private:

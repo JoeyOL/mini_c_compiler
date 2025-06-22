@@ -40,10 +40,10 @@ char Scanner::peek() {
     return c;
 }
 
-int Scanner::scanint(int c) {
-    int value = 0;
+long Scanner::scanint(int c) {
+    long value = 0;
     while (c >= '0' && c <= '9') {
-        value = value * 10 + (c - '0');
+        value = value * 10LL + (c - '0');
         c = next();
     }
     putback(c);
@@ -57,10 +57,13 @@ void Scanner::scanNumeric(Token& token, char c) {
                                  + ", column " + std::to_string(column_no));
     }
     token.type = T_NUMBER;
-    int integer_part = 0;
+    long integer_part = 0;
     if (c != '.') {
         integer_part = scanint(c);
-        token.value.setIntValue(integer_part);
+        if (integer_part > std::numeric_limits<int>::max()) {
+            token.value.setLongValue(integer_part); // Use long if integer part is too large
+        }
+        else token.value.setIntValue(integer_part);
         c = next();
     }
 
@@ -74,6 +77,8 @@ void Scanner::scanNumeric(Token& token, char c) {
         double fractional_part = scanint(c);
         double value = integer_part + fractional_part / std::pow(10, std::to_string((int)fractional_part).length());
         token.value.setFloatValue(value);
+        float_constants[value] = labelAllocator.getLabel(LableType::FLOAT_CONSTANT_LABEL); // Store float constant
+
     } else if (c == 'e' || c == 'E') {
         // Handle scientific notation
         int exponent = 0;
@@ -96,6 +101,7 @@ void Scanner::scanNumeric(Token& token, char c) {
         }
         double value = integer_part * std::pow(10, exponent);
         token.value.setFloatValue(value);
+        float_constants[value] = labelAllocator.getLabel(LableType::FLOAT_CONSTANT_LABEL); // Store float constant
     } else {
         putback(c);
     }
@@ -188,10 +194,13 @@ bool Scanner::scan(Token& token) {
     } else if (c == '}') {
         token.type = T_RBRACE;
     } else if (c == '&') {
-        if (next() == '&') token.type = T_AND; 
-        else goto Error;
+        if (peek() == '&') {
+            next();
+            token.type = T_LOGAND;
+        } 
+        token.type = T_AMPER;
     } else if (c == '|') {
-        if (next() == '|') token.type = T_OR; 
+        if (next() == '|') token.type = T_LOGOR; 
         else goto Error;
     } else {
 Error:

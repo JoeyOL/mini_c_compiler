@@ -190,6 +190,18 @@ class GenCode {
         Reg cgcall(const char *name, const Reg reg) {
             return assemblyCode->cgcall(name, reg);
         }
+        Reg cgaddress(const char *identifier) {
+            return assemblyCode->cgaddress(identifier);
+        }
+        Reg cgderef(Reg reg, PrimitiveType type) {
+            return assemblyCode->cgderef(reg, type);
+        }
+        Reg cgshlconst(Reg reg, int value) {
+            return assemblyCode->cgshlconst(reg, value);
+        }
+        void cglocalsym(Symbol sym) {
+            assemblyCode->cglocalsym(sym);
+        }
         Reg walkPragram(const std::shared_ptr<Pragram>& ast);
         Reg walkStatement(const std::shared_ptr<StatementNode>& ast);
         Reg walkExpr(const std::shared_ptr<ExprNode>& ast);

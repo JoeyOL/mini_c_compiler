@@ -7,6 +7,7 @@
 #include <vector>
 #include <filesystem>
 SymbolTable symbol_table;
+std::map<double, std::string> float_constants; // Map to store float literals
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -57,6 +58,7 @@ int main(int argc, char *argv[]) {
         std::cout << "Semantic check." << std::endl;
         Semantic semantic(ast);
         semantic.check();
+        ast->walk(""); // Walk the AST again after semantic check
         std::cout << "Semantic check completed." << std::endl;
 
         // Code generation would go here, e.g., generating assembly code from the AST

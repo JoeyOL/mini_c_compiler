@@ -28,6 +28,7 @@ public:
     virtual void cgpostamble() = 0;
     virtual Reg cgloadglob(const char *identifier, PrimitiveType type) = 0;
     virtual Reg cgstorglob(Reg r, const char *identifier, PrimitiveType type) = 0;
+    virtual void cglocalsym(Symbol sym) = 0;
     virtual void cgglobsym(Symbol sym) = 0;
     virtual void freereg(Reg reg) = 0;
     virtual Reg cgcompare(Reg r1, Reg r2, const char *op) = 0;
@@ -62,5 +63,9 @@ public:
     virtual Reg cgchar2long(Reg reg) = 0;
     virtual Reg cgcall(const char *name, const Reg reg) = 0;
     virtual void cgreturn(Reg reg, const char *end_label) = 0;
+    virtual Reg cgaddress(const char *identifier) = 0;
+    virtual Reg cgderef(Reg reg, PrimitiveType type) = 0;
+    virtual Reg cgshlconst(Reg reg, int value) = 0;
+    
 };
 

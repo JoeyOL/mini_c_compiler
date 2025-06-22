@@ -32,7 +32,7 @@ class Scanner {
 
         void skip();
         void putback(char c);
-        int scanint(int c);
+        long scanint(int c);
         char next();
         char peek();
         void scanNumeric(Token& token, char c);

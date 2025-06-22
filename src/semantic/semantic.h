@@ -20,4 +20,5 @@ public:
 private:
     std::shared_ptr<Pragram> ast;
     bool typeCompatible(PrimitiveType type1, PrimitiveType type2, bool &need_transform);
+    bool assignCompatible(PrimitiveType type1, PrimitiveType type2, bool &need_transform);
 };

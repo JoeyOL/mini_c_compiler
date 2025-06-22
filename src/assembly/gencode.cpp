@@ -40,14 +40,8 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         // }
         // Handle binary expression node
         Reg reg1 = walkExpr(x->getLeft());
-        if (x->getLeft()->isNeedTransform()) {
-           reg1 = transformType(x->getLeft()->getType(), x->getCalType(), reg1);
-        }
         Reg reg2 = walkExpr(x->getRight());
-        if (x->getRight()->isNeedTransform()) {
-           reg2 = transformType(x->getRight()->getType(), x->getCalType(), reg2);
-        }
-        
+        assert(reg1.type == reg2.type); // Ensure both registers have the same type
         Reg ret;
         switch (x->getOp()) {
             case A_ADD: return cgadd(reg1, reg2); // Add the two registers and return the result
@@ -66,6 +60,16 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         ret.type = P_LONG;
         return ret;
     } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(ast)) {
+        if (x->getOp() == U_ADDR || x->getOp() == U_DEREF) {
+            auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr());
+            if (x->getOp() == U_ADDR) {
+                return cgaddress(y->getIdentifier().name.c_str()); // Get the address of the identifier
+            } else if (x->getOp() == U_DEREF) {
+                Reg reg = cgloadglob(y->getIdentifier().name.c_str(), y->getCalculateType()); // Load the global variable into a register
+                return cgderef(reg, y->getPrimitiveType()); // Dereference the pointer to get the value
+            }
+        }
+    
         Reg reg = walkExpr(x->getExpr()); // Walk the expression in the unary node
         // Handle unary expression node
         if (x->getOp() == U_MINUS) {
@@ -74,21 +78,34 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
             return reg;
         } else if (x->getOp() == U_NOT) {
             return cgnot(reg);
-        } else  {
+        } else if (x->getOp() == U_TRANSFORM) {
+            return transformType(x->getExpr()->getPrimitiveType(), x->getPrimitiveType(), reg); // Transform the type of the expression
+        } else if (x->getOp() == U_SCALE) {
+            Reg leftreg = walkExpr(x->getExpr()); // Walk the expression in the unary node
+            Reg rightreg;
+            switch (x->getOffset()) {
+                case 2: return(cgshlconst(leftreg, 1));
+                case 4: return(cgshlconst(leftreg, 2));
+                case 8: return(cgshlconst(leftreg, 3));
+                default:
+                  // Load a register with the size and
+                  // multiply the leftreg by this size
+                      rightreg= cgload(Value{.type = P_LONG, .ivalue = x->getOffset()});
+                      return (cgmul(leftreg, rightreg));
+            }
+        } else {
             throw std::runtime_error("GenCode::generate: Unknown unary expression type");
         }
     } else if (auto x = std::dynamic_pointer_cast<ValueNode>(ast)) {
         // Handle value node
         return cgload(x->getValue()); // Load the value into a register
     } else if (auto x = std::dynamic_pointer_cast<LValueNode>(ast)) {
-        return cgloadglob(x->getIdentifier().name.c_str(), x->getType()); // Load the global variable into a register
+        // 在这一步，指针类型会被转换为P_LONG寄存器
+        return cgloadglob(x->getIdentifier().name.c_str(), x->getCalculateType()); // Load the global variable into a register
     } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(ast)) {
         // Handle assignment node
         Reg reg = walkExpr(x->getExpr()); // Walk the expression in the assignment node
-        if (x->isNeedTransform()) {
-            reg = transformType(x->getExpr()->getType(), x->getIdentifier().type, reg); // Transform the type if needed
-        }
-        cgstorglob(reg, x->getIdentifier().name.c_str(), x->getIdentifier().type); // Store the value in the global variable
+        cgstorglob(reg, x->getIdentifier().name.c_str(), x->getCalculateType()); // Store the value in the global variable
         return reg; // Return the register containing the result
 
     } else if (auto x = std::dynamic_pointer_cast<FunctionCallNode>(ast)) {
@@ -101,13 +118,8 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
 void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string false_label) {
     if (auto x = std::dynamic_pointer_cast<BinaryExpNode>(ast)) {
         Reg reg1 = walkExpr(x->getLeft()); // Walk the left expression
-        if (x->getLeft()->isNeedTransform()) {
-            reg1 = transformType(x->getLeft()->getType(), x->getType(), reg1);
-         }
         Reg reg2 = walkExpr(x->getRight()); // Walk the right expression
-        if (x->getRight()->isNeedTransform()) {
-            reg2 = transformType(x->getRight()->getType(), x->getType(), reg2);
-         }
+        assert(reg1.type == reg2.type); // Ensure both registers have the same type
         switch (x->getOp()) {
             case A_EQ: return cgnotequaljump(reg1, reg2, false_label.c_str());
             case A_NE: return cgequaljump(reg1, reg2, false_label.c_str());
@@ -142,22 +154,17 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x  = std::dynamic_pointer_cast<PrintStatementNode>(ast)) {
         Reg reg = walkExpr(x->getExpression());
-        if (x->isNeedTransform()) {
-            reg = transformType(x->getExpression()->getType(), x->getType(), reg); // Transform the type if needed
-        }
-        if (x->getType() == P_LONG) cgprintlong(reg);
+
+        if (x->getCalculateType() == P_LONG) cgprintlong(reg);
         else cgprintfloat(reg); // Print the value in the register
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<VariableDeclareNode>(ast)) {
         for (const auto& identifier: x->getIdentifiers()) {
             Symbol sym = symbol_table.getSymbol(identifier); // Get the symbol from the symbol table
-            cgglobsym(sym); // Declare a global variable with the given identifier and type
+            cglocalsym(sym); // Declare a global variable with the given identifier and type
             auto initializer = x->getInitializer(identifier);
             if (initializer != nullptr) {
                 Reg reg = walkExpr(initializer);
-                if (initializer->isNeedTransform()) {
-                    reg = transformType(initializer->getType(), x->getVariableType(), reg); // Transform the type if needed
-                }
                 cgstorglob(reg, identifier.c_str(), x->getVariableType()); // Store the value in the global variable
                 assemblyCode->freereg(reg);
             }
@@ -220,18 +227,38 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
 }
 
 void GenCode::walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast) {
-    std::string func_name = ast->getIdentifier();
-    cgfuncpreamble(func_name.c_str()); // Generate function preamble code
     walkStatement(ast->getBody()); // Walk the function body to generate code
-    cgfuncpostamble((func_name + "_end").c_str()); // Generate function postamble code
 }
 
 Reg GenCode::walkPragram(const std::shared_ptr<Pragram>& ast) {
     for (const auto &x: ast->getGlobalVariables()) {
-        walkStatement(x); // Walk each global variable declaration to generate code
-    } 
+        for (const auto &identifier: x->getIdentifiers()) {
+            Symbol sym = symbol_table.getSymbol(identifier); // Get the symbol from the symbol table
+            cgglobsym(sym); // Declare a global variable with the given identifier and type
+        }
+    }
+    // for (const auto &x: ast->getGlobalVariables()) {
+    //     walkStatement(x); // Walk each global variable declaration to generate code
+    // } 
     for (const auto &x: ast->getFunctions()) {
+        std::string func_name = x->getIdentifier() ;
+        cgfuncpreamble(func_name.c_str()); // Generate function preamble code
+        if (func_name == "main") {
+            // 全局变量初始化
+            for (const auto &x: ast->getGlobalVariables()) {
+                for (const auto &identifier: x->getIdentifiers()) {
+                    Symbol sym = symbol_table.getSymbol(identifier); // Get the symbol from the symbol table
+                    auto initializer = x->getInitializer(identifier);
+                    if (initializer != nullptr) {
+                        Reg reg = walkExpr(initializer);
+                        cgstorglob(reg, identifier.c_str(), x->getVariableType()); // Store the value in the global variable
+                        assemblyCode->freereg(reg);
+                    }
+                }
+            }
+        }
         walkFunction(x); // Walk each function to generate code
+        cgfuncpostamble((func_name + "_end").c_str()); // Generate function postamble code
     }
     return Reg{.type = P_NONE, .idx = 0}; // Return a dummy register for now
 }
@@ -264,9 +291,6 @@ void GenCode::walkReturn(const std::shared_ptr<ReturnStatementNode>& ast) {
     const char* end_label = (ast->getFunction().name + "_end").c_str();
     if (ast->getExpression() != nullptr) {
         Reg reg = walkExpr(ast->getExpression()); // Walk the return expression to generate code
-        if (ast->isNeedTransform()) {
-            reg = transformType(ast->getExpression()->getType(), ast->getType(), reg); // Transform the type if needed
-        }
         assemblyCode->cgreturn(reg, end_label); // Generate return code with the register
     } else {
         assemblyCode->cgreturn(Reg{.type = P_VOID, .idx = 0}, end_label); // Generate return code without a value

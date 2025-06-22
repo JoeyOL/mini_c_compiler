@@ -12,8 +12,11 @@ void Semantic::check() {
 void Semantic::checkAssignment(std::shared_ptr<AssignmentNode> node) {
     Symbol identifier = node->getIdentifier();
     checkExpression(node->getExpr());
-    if (!typeCompatible(identifier.type, node->getExpr()->getType(), node->isNeedTransform())) {
+    if (!assignCompatible(identifier.type, node->getExpr()->getPrimitiveType(), node->isNeedTransform())) {
         throw std::runtime_error("Semantic::checkAssignment: Type mismatch for assignment to " + identifier.name);
+    }
+    if (node->isNeedTransform()) {
+        node->setExpr(std::make_shared<UnaryExpNode>(U_TRANSFORM, node->getExpr(), identifier.type));
     }
 }
 
@@ -27,29 +30,49 @@ void Semantic::checkVariableDeclare(std::shared_ptr<VariableDeclareNode> node) {
             // Check initializer type
             auto initializer = node->getInitializer(identifier);
             checkExpression(initializer);
-            if (!typeCompatible(var_type, initializer->getType(), initializer->isNeedTransform())) {
+            if (!assignCompatible(var_type, initializer->getPrimitiveType(), initializer->isNeedTransform())) {
                 throw std::runtime_error("Semantic::checkVariableDeclare: Type mismatch for initializer of " + identifier);
+            }
+            if (initializer->isNeedTransform()) {
+                initializer = std::make_shared<UnaryExpNode>(U_TRANSFORM, initializer, var_type);
+                node->setInitializer(identifier, initializer);
             }
         }
     }
 }
 
+bool Semantic::assignCompatible(PrimitiveType type1, PrimitiveType type2, bool& need_transform) {
+    // Check if two types are compatible for assignment
+    if (type1 == P_VOID || type2 == P_VOID || type1 == P_NONE || type2 == P_NONE) {
+        return false; // Void type is not compatible with any other type
+    }
+
+    if (is_pointer(type1)) {
+        if (type1 != type2) {
+            throw std::runtime_error("Semantic::assignCompatible: Pointer types do not match for assignment");
+        }
+        need_transform = false; // Pointer types are compatible as long as they match
+        return true;
+    }
+
+    return typeCompatible(type1, type2, need_transform); // Use type compatibility check for non-pointer types
+}
+
 bool Semantic::typeCompatible(PrimitiveType type1, PrimitiveType type2, bool& need_transform) {
     // Check if two types are compatible
+    if (type1 == P_VOID || type2 == P_VOID || type1 == P_NONE || type2 == P_NONE) {
+        need_transform = false; // Void type is not compatible with any other type
+        return false;
+    }
+
+    if (is_pointer(type1)) type1 = P_LONG;
+    if (is_pointer(type2)) type2 = P_LONG;
     if (type1 == type2) {
         need_transform = false;
-        return true; // Same type is always compatible
+    } else {
+        need_transform = true; // Different types may require transformation
     }
-    if ((type1 == P_INT && type2 == P_FLOAT) || (type1 == P_FLOAT && type2 == P_INT) 
-        || (type1 == P_CHAR && type2 == P_INT) || (type1 == P_INT && type2 == P_CHAR)
-        || (type1 == P_LONG && type2 == P_INT) || (type1 == P_INT && type2 == P_LONG)
-        || (type1 == P_LONG && type2 == P_FLOAT) || (type1 == P_FLOAT && type2 == P_LONG)
-        || (type1 == P_LONG && type2 == P_CHAR) || (type1 == P_CHAR && type2 == P_LONG)
-        || (type1 == P_CHAR && type2 == P_FLOAT) || (type1 == P_FLOAT && type2 == P_CHAR)) {
-        need_transform = true; // Indicate that a transformation is needed
-        return true; // int and float are compatible
-    }
-    return false; // Other types are not compatible
+    return true; // Same type is always compatible
 }
 
 void Semantic::checkPrint(std::shared_ptr<PrintStatementNode> node) {
@@ -59,16 +82,20 @@ void Semantic::checkPrint(std::shared_ptr<PrintStatementNode> node) {
         throw std::runtime_error("Semantic::checkPrint: No expression found in print statement");
     }
     // Check if the expression type is compatible with print
-    if (expr->getType() == P_INT || expr->getType() == P_CHAR || expr->getType() == P_LONG) {
-        if (!typeCompatible(expr->getType(), P_LONG, node->isNeedTransform())) {
+    if (expr->getCalculateType() == P_INT || expr->getCalculateType() == P_CHAR || expr->getCalculateType() == P_LONG) {
+        if (!typeCompatible(expr->getCalculateType(), P_LONG, node->isNeedTransform())) {
             throw std::runtime_error("Semantic::checkPrint: Type mismatch in print statement, expected int");
         }
-        node->setType(P_LONG);
+        if (node->isNeedTransform()) {
+            node->setExpression(std::make_shared<UnaryExpNode>(U_TRANSFORM, expr, P_LONG));
+        }
     } else {
-        if (!typeCompatible(expr->getType(), P_FLOAT, node->isNeedTransform())) {
+        if (!typeCompatible(expr->getCalculateType(), P_FLOAT, node->isNeedTransform())) {
             throw std::runtime_error("Semantic::checkPrint: Type mismatch in print statement, expected string");
         }
-        node->setType(P_FLOAT);
+        if (node->isNeedTransform()) {
+            node->setExpression(std::make_shared<UnaryExpNode>(U_TRANSFORM, expr, P_FLOAT));
+        }
     }
 }
 
@@ -115,9 +142,19 @@ void Semantic::checkReturnStatement(std::shared_ptr<ReturnStatementNode> node) {
     if (node->getExpression() != nullptr) {
         checkExpression(node->getExpression());
         PrimitiveType return_type = symbol_table.getCurrentFunction().return_type;
-        if (!typeCompatible(return_type, node->getExpression()->getType(), node->isNeedTransform())) {
+        if (is_pointer(return_type)) {
+            if (node->getExpression()->getPrimitiveType() != return_type) {
+                throw std::runtime_error("Semantic::checkReturnStatement: Pointer type mismatch in return statement");
+            }
+        }
+
+        if (!typeCompatible(return_type, node->getExpression()->getPrimitiveType(), node->isNeedTransform())) {
             throw std::runtime_error("Semantic::checkReturnStatement: Type mismatch in return statement");
         }
+        if (node->isNeedTransform()) {
+            node->setExpression(std::make_shared<UnaryExpNode>(U_TRANSFORM, node->getExpression(), return_type));
+        }
+
     } else {
         assert(symbol_table.getCurrentFunction().return_type == P_VOID);
     }
@@ -153,15 +190,60 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
     if (auto x = std::dynamic_pointer_cast<BinaryExpNode>(node)) {
         checkExpression(x->getLeft());
         checkExpression(x->getRight());
-        if (x->getLeft()->getType() == P_VOID || x->getRight()->getType() == P_VOID) {
+        if (x->getLeft()->getPrimitiveType() == P_VOID || x->getRight()->getPrimitiveType() == P_VOID || 
+            x->getLeft()->getPrimitiveType() == P_NONE || x->getRight()->getPrimitiveType() == P_NONE) {
             throw std::runtime_error("Semantic::checkExpression: Void type in binary expression");
         }
-        if (!typeCompatible(x->getLeft()->getType(), x->getRight()->getType(), x->getLeft()->isNeedTransform())) {
+
+        // 判断是不是两个指针做运算，两个指针只能做比较
+        if (is_pointer(x->getLeft()->getPrimitiveType()) && is_pointer(x->getRight()->getPrimitiveType()) && 
+            (x->getOp() != A_EQ && x->getOp() != A_NE) && (x->getOp() != A_LT && x->getOp() != A_LE && x->getOp() != A_GT && x->getOp() != A_GE)) {
+            throw std::runtime_error("Semantic::checkExpression: Binary expression cannot have two pointer types");
+        }
+
+        // 指针只能进行加减法
+        if (is_pointer(x->getLeft()->getPrimitiveType()) && !is_pointer(x->getRight()->getPrimitiveType()) || 
+            !is_pointer(x->getLeft()->getPrimitiveType()) && is_pointer(x->getRight()->getPrimitiveType())) {
+            if (x->getOp() != A_ADD && x->getOp() != A_SUBTRACT) {
+                throw std::runtime_error("Semantic::checkExpression: Pointer types can only be used with addition or subtraction");
+            }
+        }
+
+        if (!typeCompatible(x->getLeft()->getCalculateType(), x->getRight()->getCalculateType(), x->getLeft()->isNeedTransform())) {
             throw std::runtime_error("Semantic::checkExpression: Type mismatch in binary expression");
         }
+
+        // 获取计算类型
         x->updateCalType();
-        typeCompatible(x->getCalType(), x->getRight()->getType(), x->getRight()->isNeedTransform());
-        typeCompatible(x->getCalType(), x->getLeft()->getType(), x->getLeft()->isNeedTransform());
+        typeCompatible(x->getCalType(), x->getRight()->getCalculateType(), x->getRight()->isNeedTransform());
+        typeCompatible(x->getCalType(), x->getLeft()->getCalculateType(), x->getLeft()->isNeedTransform());
+
+
+        // 如果需要转换，创建一个unary表达式节点
+        if (x->getRight()->isNeedTransform() || x->getLeft()->isNeedTransform()) {
+            if (x->getRight()->isNeedTransform()) {
+                x->setRight(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getRight(), x->getCalType()));
+            }
+            if (x->getLeft()->isNeedTransform()) {
+                x->setLeft(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getLeft(), x->getCalType()));
+            }
+        }
+
+        // 如果左右表达式有一个的offset不等于1，需要创建一个unary表达式节点
+        if (x->getLeft()->getOffset() != 1 || x->getRight()->getOffset() != 1) {
+            if (x->getLeft()->getOffset() != 1 && x->getRight()->getOffset() != 1) {
+                // do nothing
+            } else if (x->getRight()->getOffset() != 1) {
+                auto y = std::make_shared<UnaryExpNode>(U_SCALE, x->getLeft(), x->getLeft()->getPrimitiveType());
+                y->setOffset(x->getRight()->getOffset());
+                x->setLeft(y);
+            } else if (x->getLeft()->getOffset() != 1) {
+                auto y = std::make_shared<UnaryExpNode>(U_SCALE, x->getRight(), x->getRight()->getPrimitiveType());
+                y->setOffset(x->getLeft()->getOffset());
+                x->setRight(y);
+            }
+        }
+
         x->updateTypeAfterCal();
 
     } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(node)) {

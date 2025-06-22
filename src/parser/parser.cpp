@@ -32,6 +32,61 @@ std::shared_ptr<ExprNode> Parser::parseBinaryExpression() {
     return std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
 }
 
+
+std::shared_ptr<ExprNode> Parser::prefixExpr() {
+    const Token &tok = peek();
+    if (tok.type == T_AMPER)  {
+        consume(); // Consume the '&' token
+        int amper_count = 1;
+        while (peek().type == T_AMPER) {
+            amper_count++;
+            consume(); // Consume all consecutive '&' tokens
+        }
+
+        auto primary_node = parimary();
+        if (auto x = std::dynamic_pointer_cast<LValueNode>(primary_node)) {
+            // 获取指针类型
+            PrimitiveType type = x->getPrimitiveType();
+            while (amper_count-- > 0) {
+                type = pointTo(type);
+            }
+            std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_ADDR, primary_node, type);
+            return unary_node;
+        } else {
+            throw std::runtime_error("Parser::prefixExpr: Expected lvalue after '&' at line " + 
+                std::to_string(tok.line_no) + ", column " + 
+                std::to_string(tok.column_no));
+        }
+
+    } else if (tok.type == T_STAR) {
+        consume();
+        int star_count = 1;
+        while (peek().type == T_STAR) {
+            star_count++;
+            consume(); // Consume all consecutive '*' tokens
+        }
+        // 解引用符号 '*'后面必须接一个变量
+        auto primary_node = parimary();
+        if (auto x = std::dynamic_pointer_cast<LValueNode>(primary_node)) {
+            // 获取指针类型
+            PrimitiveType type = x->getPrimitiveType();
+            while (star_count-- > 0) {
+                type = valueAt(type);
+            }
+            std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_DEREF, primary_node, type);
+            return unary_node;
+        } else {
+            throw std::runtime_error("Parser::prefixExpr: Expected lvalue after '&' at line " + 
+                std::to_string(tok.line_no) + ", column " + 
+                std::to_string(tok.column_no));
+        }
+
+    } else {
+        return parimary(); // If no prefix operator, just parse the primary expression
+    }
+}
+
+
 std::shared_ptr<ExprNode> Parser::parimary() {
     const Token &tok = consume();
     if (tok.type == T_PLUS || tok.type == T_MINUS || tok.type == T_NOT) {
@@ -89,7 +144,7 @@ ExprType Parser::arithop(const Token &tok) {
 }
 
 std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precedence) {
-    std::shared_ptr<ExprNode> left = parimary();
+    std::shared_ptr<ExprNode> left = prefixExpr();
     if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI || peek().type == T_COMMA) {
         return left; // If no token is available, return the left node
     }
@@ -187,9 +242,17 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
     assert(peek().type == T_INT || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG);
     auto var_decl = std::make_shared<VariableDeclareNode>(consume().type);
     do {
-        if (peek().type == T_COMMA) {
+
+        // 检查是不是指针类型
+        // 这里实际上支持了 int ******a这种操作，但是会导致pointTo操作失败，后续实现
+        PrimitiveType type = var_decl->getVariableType();
+        while (peek().type == T_STAR) {
             consume();
+            type = pointTo(type); // Update the type to pointer type
         }
+        var_decl->setVariableType(type); // Set the variable type to pointer type
+
+
         if (current >= toks.size() || peek().type != T_IDENTIFIER) {
             throw std::runtime_error("Parser::parseVariableDeclare: Expected identifier at line " + 
                 std::to_string(peek().line_no) + ", column " + 
@@ -204,7 +267,8 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
             var_decl->addIdentifier(var_name);
         }
         symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
-    } while (current < toks.size() && peek().type == T_COMMA);
+    } while (current < toks.size() && consume().type == T_COMMA);
+    putback(); // Put back the last token, which should be a semicolon or end of statement
     return var_decl;
 }
 
