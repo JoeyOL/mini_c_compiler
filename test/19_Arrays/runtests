@@ -1,0 +1,27 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+for i in test/19_Arrays/input*
+do if [ ! -f "test/19_Arrays/out.${i##*/}" ]
+   then echo "Can't run test on ${i##*/}, no output file!"
+   else
+     echo -n ${i##*/}
+     ./build/comp $i 
+     cc -o output output.s src/lib/print.c
+     ./output > test/19_Arrays/trial.${i##*/}
+     sed -i 's/\r//' test/19_Arrays/out.${i##*/}
+     cmp -s "test/19_Arrays/out.${i##*/}" "test/19_Arrays/trial.${i##*/}"
+     if [ "$?" -eq "1" ]
+     then echo ": failed"
+       diff -c "test/19_Arrays/out.${i##*/}" "test/19_Arrays/trial.${i##*/}"
+       echo
+     else echo ": OK"
+     fi
+          rm -f output output.s "test/19_Arrays/trial.${i##*/}"
+   fi
+done
