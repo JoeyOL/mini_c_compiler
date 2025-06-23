@@ -166,6 +166,7 @@ class UnaryExpNode : public ExprNode {
         }
         void updateType() {
             if (op != U_TRANSFORM && op != U_ADDR && op != U_DEREF) type = expr->getPrimitiveType();
+            if (op == U_SCALE) type = P_LONG; // Scale operation always results in a long type
         }
     private:
         UnaryOp op;
@@ -174,8 +175,12 @@ class UnaryExpNode : public ExprNode {
 
 class LValueNode : public ExprNode {
     public:
-        LValueNode(Symbol identifier) : identifier(std::move(identifier)) {
+        LValueNode(Symbol identifier, std::shared_ptr<ExprNode> index = nullptr): identifier(std::move(identifier)) {
             type = identifier.type;
+            if (identifier.is_array) {
+                is_array = true; // Set the flag if the identifier is an array
+            }
+            this->index = std::move(index); // Set the index if provided
         }
         std::string convertTypeToString() const {
             switch (type) {
@@ -189,6 +194,10 @@ class LValueNode : public ExprNode {
                 case P_CHARPTR: return "char*";
                 case P_LONGPTR: return "long*";
                 case P_VOIDPTR: return "void*";
+                case P_INTARR: return "int[]" ;
+                case P_FLOATARR: return "float[]";
+                case P_CHARARR: return "char[]" ;
+                case P_LONGARR: return "long[]";
                 default: return "unknown";
             }
         }
@@ -196,9 +205,23 @@ class LValueNode : public ExprNode {
         void walk(std::string prefix) override {
             // Implement the walk method to print the identifier
             std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier.name << ", Type: " << convertTypeToString() << std::endl;
+            if (is_array) {
+                index->walk(prefix + "\t");
+            }
+        }
+        bool isArray() const {
+            return is_array; // Return whether the identifier is an array
+        }
+        std::shared_ptr<ExprNode> getIndex() const {
+            return index; // Return the index expression if it exists
+        }
+        void setIndex(std::shared_ptr<ExprNode> index) {
+            this->index = std::move(index); // Set the index expression for the identifier
         }
     private:
         Symbol identifier;
+        bool is_array = false; // Flag to indicate if the identifier is an array
+        std::shared_ptr<ExprNode> index;
 };
 
 
@@ -260,4 +283,67 @@ class AssignmentNode : public ExprNode {
 
         std::shared_ptr<ExprNode> lvalue;
         std::shared_ptr<ExprNode> expression; // Expression to assign to the variable
+};
+
+class ArrayInitializer : public ExprNode {
+    public:
+        ArrayInitializer(std::vector<int> &dims, int depth) {
+            if (depth != dims.size() - 1) {
+                min_size = dims.back();
+                max_size = 1;
+                for (int i = depth; i < dims.size(); ++i) {
+                    max_size *= dims[i]; // Calculate the maximum size of the array
+                }
+                next_size = max_size / dims[depth];
+            } else {
+                min_size = 0;
+                max_size = dims[depth];
+                next_size = -1;
+            }
+            current_size = 0;
+        }
+
+        void addInitializer(std::shared_ptr<ExprNode> value) {
+            if (auto x = std::dynamic_pointer_cast<ArrayInitializer>(value)) {
+                if (next_size == -1) {
+                    throw std::runtime_error("ArrayInitializer::addInitializer: too many initializers");
+                }
+                current_size += next_size;
+                values.push_back(x);
+            } else if (auto x = std::dynamic_pointer_cast<ValueNode>(value)) {
+                values.push_back(x);
+                current_size++;
+            } 
+            if (current_size > max_size) {
+                throw std::runtime_error("ArrayInitializer::addInitializer: too many initializers");
+            }
+        }
+
+        bool canAcceptNestedInitializer() const {
+            return current_size % min_size == 0;
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Array Initializer: " << std::endl;
+            for (const auto& value : values) {
+                value->walk(prefix + "\t"); // Walk each value in the array initializer
+            }
+        }
+
+        std::vector<std::shared_ptr<ExprNode>> getElements() const {
+            return values; // Return the values in the array initializer
+        }
+
+        int getLeftSize() const {
+            return max_size - current_size; // Return the number of elements that can still be added
+        }
+
+    private:
+        int min_size;
+        int current_size; // 现在初始化的元素个数
+        int next_size; //遇到一个{}，之后current_size需要增加的size
+        int max_size;
+        // 只允许常量声明
+        std::vector<std::shared_ptr<ExprNode>> values; // Values to initialize the array with
+
 };

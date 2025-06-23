@@ -30,6 +30,12 @@ void Semantic::checkVariableDeclare(std::shared_ptr<VariableDeclareNode> node) {
         if (node->getInitializer(identifier) != nullptr) {
             // Check initializer type
             auto initializer = node->getInitializer(identifier);
+
+            if (is_array(var_type)) {
+                checkExpression(initializer);
+                continue;
+            }
+
             checkExpression(initializer);
             if (!assignCompatible(var_type, initializer->getPrimitiveType(), initializer->isNeedTransform())) {
                 throw std::runtime_error("Semantic::checkVariableDeclare: Type mismatch for initializer of " + identifier);
@@ -257,6 +263,26 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
         auto args = x->getArguments();
         for (auto arg : args) {
             checkExpression(arg);
+        }
+    } else if (auto x = std::dynamic_pointer_cast<ArrayInitializer>(node)) {
+        for (auto& elem : x->getElements()) {
+            if (auto y = std::dynamic_pointer_cast<ArrayInitializer>(elem)) {
+                y->setPrimitiveType(x->getPrimitiveType()); // Set the type of the nested array initializer
+                checkExpression(y);
+            } 
+        }
+    } else if (auto x = std::dynamic_pointer_cast<LValueNode>(node)) {
+        if (!x->isArray()) return;
+        std::shared_ptr<ExprNode> index = x->getIndex();
+        if (index != nullptr) {
+            checkExpression(index);
+            if (!typeCompatible(index->getPrimitiveType(), P_INT, index->isNeedTransform())) {
+                throw std::runtime_error("Semantic::checkExpression: Index type must be int for array access");
+            }
+            if (index->isNeedTransform()) {
+                index = std::make_shared<UnaryExpNode>(U_TRANSFORM, index, P_INT);
+                x->setIndex(index);
+            }
         }
     }
 }

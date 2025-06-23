@@ -52,6 +52,14 @@ std::shared_ptr<ExprNode> Parser::prefixExpr() {
             }
             std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_ADDR, primary_node, type);
             return unary_node;
+        } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(primary_node)) {
+            // 不会出现对指针先解引用在取地址的情况，因此出现了解引用的话一定是数组
+            assert(x->getOp() == U_DEREF); // Expect a dereference operation
+            auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr());
+            assert(y != nullptr); // Expect the expression to be an lvalue
+            assert(y->isArray());
+            std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_ADDR, y, pointTo(y->getPrimitiveType()));
+            return unary_node; // Return the unary node with address operation
         } else {
             throw std::runtime_error("Parser::prefixExpr: Expected lvalue after '&' at line " + 
                 std::to_string(tok.line_no) + ", column " + 
@@ -65,7 +73,7 @@ std::shared_ptr<ExprNode> Parser::prefixExpr() {
             star_count++;
             consume(); // Consume all consecutive '*' tokens
         }
-        // 解引用符号 '*'后面必须接一个变量
+        // 解引用符号 '*'后面必须接一个变量或者指针表达式
         std::shared_ptr<ExprNode> primary_node;
         if (peek().type == T_LPAREN) {
             consume(); // Consume the '(' token
@@ -85,6 +93,58 @@ std::shared_ptr<ExprNode> Parser::prefixExpr() {
 
     } else {
         return parimary(); // If no prefix operator, just parse the primary expression
+    }
+}
+
+std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
+    const Token &tok = consume();
+    if (tok.type != T_IDENTIFIER) {
+        throw std::runtime_error("Parser::parseArrayAccess: Expected identifier at line " +
+            std::to_string(tok.line_no) + ", column " + 
+            std::to_string(tok.column_no));
+    }
+    Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
+    int depth = 0, offset = -1;
+    std::vector<std::shared_ptr<ExprNode>> indices;
+    while (peek().type == T_LBRACKET) {
+        consume(); // Consume the '[' token
+        std::shared_ptr<ExprNode> index = parseExpressionWithPrecedence(0);
+        offset = sym.getArrayBaseOffset(depth);
+        offset /= symbol_table.typeToSize(valueAt(sym.type)); // Calculate the base offset for the array element
+        if (offset != 1) {
+            index = std::make_shared<BinaryExpNode>(A_MULTIPLY, index, std::make_shared<ValueNode>(Value{P_INT, .ivalue = offset}));
+            indices.push_back(index); // If offset is not 1, scale the index by the base offset
+        } else {
+            indices.push_back(index); // If offset is 1, just use the index directly
+        }
+        assert(consume().type == T_RBRACKET); // Expect a closing bracket
+        depth++;
+    }
+    std::shared_ptr<ExprNode> left = indices.empty() ? nullptr : indices[0];
+    if (!indices.empty()) indices.erase(indices.begin());
+    while (indices.size() > 0) {
+        std::shared_ptr<ExprNode> right = indices[0];
+        indices.erase(indices.begin());
+        left = std::make_shared<BinaryExpNode>(A_ADD, left, right);
+    }
+    if (left != nullptr) {
+        left = std::make_shared<UnaryExpNode>(U_SCALE, left, P_LONG); // Scale the index by the size of the array element
+        left->setOffset(symbol_table.typeToSize(valueAt(sym.type))); // Set the offset for the array element
+    }
+    std::shared_ptr<LValueNode> lvaule = std::make_shared<LValueNode>(sym, left);
+    if (depth == sym.array_dimensions.size()) {
+        std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_DEREF, lvaule, valueAt(sym.type));
+        return ret;
+    } else {
+        if (depth != sym.array_dimensions.size() - 1) {
+            throw std::runtime_error("Parser::parseArrayAccess: Array access depth mismatch at line " + 
+                std::to_string(tok.line_no) + ", column " + 
+                std::to_string(tok.column_no));
+        }
+        PrimitiveType point_type = pointTo(sym.type);
+        // 只允许 *(p+1) = expr 这种形式，如a[5][5], *(a[5] + 1) = expr
+        std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_ADDR, lvaule, point_type);
+        return ret;
     }
 }
 
@@ -108,6 +168,9 @@ std::shared_ptr<ExprNode> Parser::parimary() {
         if (peek().type == T_LPAREN) {
             putback(); // Put back the identifier token
             return parseFunctionCall();
+        } else if (peek().type == T_LBRACKET) {
+            putback();
+            return parseArrayAccess();
         } else {
             Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
             return std::make_shared<LValueNode>(sym);
@@ -144,7 +207,7 @@ ExprType Parser::arithop(const Token &tok) {
 
 std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precedence) {
     std::shared_ptr<ExprNode> left = prefixExpr();
-    if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI || peek().type == T_COMMA) {
+    if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI || peek().type == T_COMMA || peek().type == T_RBRACKET) {
         return left; // If no token is available, return the left node
     }
     while (peek().type == T_ASSIGN || precedence.at(arithop(peek())) > prev_precedence) {
@@ -168,7 +231,7 @@ std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precede
             std::shared_ptr<ExprNode> right = parseExpressionWithPrecedence(precedence.at(type));
             auto ret= std::make_shared<BinaryExpNode>(type, std::move(left), std::move(right));
             ret->updateTypeAfterCal();
-            if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI) {
+            if (current >= toks.size() || peek().type == T_RPAREN || peek().type == T_SEMI || peek().type == T_COMMA || peek().type == T_RBRACKET) {
                 return ret; // If no token is available, return the left node
             }
             left = std::move(ret); // Update left to the new binary expression node
@@ -257,6 +320,38 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
     return stmts;
 }
 
+std::shared_ptr<ArrayInitializer> Parser::parseArrayInitializer(std::vector<int> &dimensions, int depth) {
+    if (depth >= dimensions.size()) {
+        throw std::runtime_error("Parser::parseArrayInitializer: Depth exceeds dimensions size at line " + 
+            std::to_string(peek().line_no) + ", column " + 
+            std::to_string(peek().column_no));
+    }
+    assert(consume().type == T_LBRACE);
+    std::shared_ptr<ArrayInitializer> array_init = std::make_shared<ArrayInitializer>(dimensions, depth);
+    while(peek().type != T_RBRACE) {
+        if (peek().type == T_NUMBER) {
+            auto value = std::make_shared<ValueNode>(consume().value);
+            array_init->addInitializer(value);
+        } else if (peek().type == T_LBRACE) {
+            if (!array_init->canAcceptNestedInitializer()) {
+                throw std::runtime_error("Parser::parseArrayInitializer: Can not accpet a nested initializer " + 
+                    std::to_string(peek().line_no) + ", column " + 
+                    std::to_string(peek().column_no));
+            }
+            // 递归解析嵌套的数组初始化
+            std::shared_ptr<ArrayInitializer> nested_init = parseArrayInitializer(dimensions, depth + 1);
+            array_init->addInitializer(nested_init);
+        } else {
+            throw std::runtime_error("Parser::parseArrayInitializer: Expected number or '{' at line " + 
+                std::to_string(peek().line_no) + ", column " + 
+                std::to_string(peek().column_no));
+        }
+        if (peek().type != T_RBRACE) assert(consume().type == T_COMMA);
+    }
+    assert(consume().type == T_RBRACE); // Expect a closing brace
+    return array_init;
+}
+
 std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
     assert(peek().type == T_INT || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG);
     auto var_decl = std::make_shared<VariableDeclareNode>(consume().type);
@@ -278,14 +373,39 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
                 std::to_string(peek().column_no));
         }
         std::string var_name = consume().value.strvalue;
+
+        if (peek().type == T_LBRACKET) {
+            while (peek().type == T_LBRACKET) {
+                consume(); // Consume the '[' token
+                if (peek().type != T_NUMBER) {
+                    throw std::runtime_error("Parser::parseVariableDeclare: Expected number after '[' at line " + 
+                        std::to_string(peek().line_no) + ", column " + 
+                        std::to_string(peek().column_no));
+                }
+                int array_size = consume().value.ivalue;
+                assert(consume().type == T_RBRACKET); // Expect a closing bracket
+                var_decl->addDimension(array_size); // Add the array dimension to the variable declaration
+            }
+            var_decl->setArray(true); // Set the variable as an array
+        }
+
         if (peek().type == T_ASSIGN) {
             consume();
-            std::shared_ptr<ExprNode> initializer = parseExpressionWithPrecedence(0);
+            std::shared_ptr<ExprNode> initializer;
+            if (!var_decl->isArray()) initializer = parseExpressionWithPrecedence(0);
+            else {
+                auto dims = var_decl->getDimensions();
+                initializer = parseArrayInitializer(dims, 0);
+                initializer->setPrimitiveType(valueAt(var_decl->getVariableType())); // Set the primitive type of the initializer
+            }
             var_decl->addIdentifier(var_name, std::move(initializer));
         } else {
             var_decl->addIdentifier(var_name);
         }
-        symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
+
+        // 添加到符号表
+        if (!var_decl->isArray()) symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
+        else symbol_table.addSymbol(var_name, var_decl->getVariableType(), var_decl->getDimensions()); // Add the variable to the symbol table with its dimensions
     } while (current < toks.size() && consume().type == T_COMMA);
     putback(); // Put back the last token, which should be a semicolon or end of statement
     return var_decl;

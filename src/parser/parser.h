@@ -112,12 +112,14 @@ public:
     std::shared_ptr<FunctionCallNode> parseFunctionCall();
     std::shared_ptr<ReturnStatementNode> parseReturnStatement();
     std::shared_ptr<Pragram> parsePragram();
+    std::shared_ptr<UnaryExpNode> parseArrayAccess();
 
 private:
     std::vector<Token> &toks;
     size_t current = 0;
     std::shared_ptr<ExprNode> parimary();
     std::shared_ptr<ExprNode> prefixExpr();
+    std::shared_ptr<ArrayInitializer> parseArrayInitializer(std::vector<int> &dimensions, int depth = 0);
     ExprType arithop(const Token &tok);
     Token consume() {
         return toks[current++];

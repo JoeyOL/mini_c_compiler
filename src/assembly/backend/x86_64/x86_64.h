@@ -393,7 +393,7 @@ public:
             "\t.comm\t" << sym.name << "," << sym.size << "," << sym.size << "\n"; // Declare a global symbol
     }
 
-    void cgglobsym(Symbol sym) override {
+    void cgglobsym(Symbol sym, std::shared_ptr<ArrayInitializer> init = nullptr) override {
         outputFile <<
             "\t.data\n\t.globl\t" <<sym.name << "\n" << sym.name << ":\t" ; // Declare a global symbol
         switch (sym.type) {
@@ -412,10 +412,16 @@ public:
             case P_INTPTR : case P_FLOATPTR : case P_CHARPTR : case P_LONGPTR : case P_VOIDPTR:
                 outputFile << "\t.quad\t0\n"; // Initialize pointer global variable to 0
                 break;
+            case P_INTARR : case P_FLOATARR : case P_CHARARR : case P_LONGARR:
+                if (init != nullptr) cgglobarray(sym, init);
+                else {
+                    outputFile << "\t.zero\t" << sym.size << "\n"; // Initialize array global variable to 0
+                }
+                break;
             default:
                 throw std::runtime_error("GenCode::cgglobsym: Unsupported type for global symbol");
         }
-        outputFile << "\t.text\n"; // Switch back to text section for code
+       
     }
     void freereg(Reg reg) override {
         regManager->freeRegister(reg); // Free the specified register
@@ -493,7 +499,7 @@ public:
     Reg cgnot(Reg r1) override {
         if (r1.type == P_FLOAT) {
             r1 = cgfloat2long(r1);
-        }
+        } else r1.type = P_LONG; // Ensure the register is treated as long for comparison
         Reg r2 = cgload(Value{ .type = P_LONG, .ivalue = 0}); // Allocate a new register for the result
         return cgcompare(r1, r2, "sete");
     }
@@ -728,21 +734,21 @@ public:
     Reg cgderef(Reg reg, PrimitiveType type) override {
         Reg float_reg;
         switch (type) {
-            case P_INTPTR:
+            case P_INTPTR: case P_INTARR :
                 outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the value at the address in reg to eax
                 reg.type = P_INT; // Update the register type to int
                 break;
-            case P_CHARPTR:
+            case P_CHARPTR: case P_CHARARR:
                 outputFile << "\tmovzbq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the byte at the address in reg to al
                 reg.type = P_CHAR; // Update the register type to char
                 break;
-            case P_FLOATPTR:
+            case P_FLOATPTR: case P_FLOATARR:
                 float_reg = regManager->allocateRegister(P_FLOAT); // Allocate a new register for the float value
                 outputFile << "\tmovsd\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(float_reg) << "\n";; // Move the double at the address in reg to xmm0
                 regManager->freeRegister(reg); // Free the original register
                 reg = float_reg;// Update the register type to float
                 break;
-            case P_LONGPTR:
+            case P_LONGPTR: case P_LONGARR:
                 outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the value at the address in reg to rax
                 reg.type = P_LONG; // Update the register type to long
                 break;
@@ -778,6 +784,32 @@ public:
         }
         regManager->freeRegister(addr); // Free the address register after use
         return reg; // Return the register containing the stored value
+    }
+
+    void cgglobarray(Symbol sym, std::shared_ptr<ArrayInitializer> init) {
+        PrimitiveType type = init->getPrimitiveType();
+        for (auto &elem: init->getElements()) {
+            if (auto x = std::dynamic_pointer_cast<ValueNode>(elem)) {
+                if (type == P_INT) {
+                    outputFile << "\t.long\t" << x->getIntValue() << "\n"; // Store int value
+                } else if (type == P_CHAR) {
+                    outputFile << "\t.byte\t" << x->getCharValue() << "\n"; // Store char value
+                } else if (type== P_FLOAT) {
+                    outputFile << "\t.double\t" << x->getFloatValue() << "\n"; // Store float value
+                } else if (type == P_LONG) {
+                    outputFile << "\t.quad\t" << x->getLongValue() << "\n"; // Store long value
+                } else {
+                    throw std::runtime_error("GenCode::cgglobarray: Unsupported type for global array element");
+                }
+            } else if (auto x = std::dynamic_pointer_cast<ArrayInitializer>(elem)) {
+                cgglobarray(sym, x); // Recursively handle nested array initializers
+            } else {
+                throw std::runtime_error("GenCode::cgglobarray: Unsupported element type in array initializer");
+            }
+        }
+        if (init->getLeftSize()) {
+            outputFile << "\t.zero\t" << init->getLeftSize() * symbol_table.typeToSize(type) << "\n"; // Allocate space for the array if specified
+        }
     }
 
 private:

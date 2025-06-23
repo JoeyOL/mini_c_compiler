@@ -29,7 +29,7 @@ public:
     virtual Reg cgloadglob(const char *identifier, PrimitiveType type) = 0;
     virtual Reg cgstorglob(Reg r, const char *identifier, PrimitiveType type) = 0;
     virtual void cglocalsym(Symbol sym) = 0;
-    virtual void cgglobsym(Symbol sym) = 0;
+    virtual void cgglobsym(Symbol sym, std::shared_ptr<ArrayInitializer> init = nullptr) = 0;
     virtual void freereg(Reg reg) = 0;
     virtual Reg cgcompare(Reg r1, Reg r2, const char *op) = 0;
     virtual Reg cgequal(Reg r1, Reg r2) = 0;

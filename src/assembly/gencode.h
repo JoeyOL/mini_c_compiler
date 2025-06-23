@@ -63,8 +63,8 @@ class GenCode {
             return assemblyCode->cgstorglob(r, identifier, type);
         }
 
-        void cgglobsym(Symbol sym) {
-            assemblyCode->cgglobsym(sym);
+        void cgglobsym(Symbol sym, std::shared_ptr<ArrayInitializer> init = nullptr) {
+            assemblyCode->cgglobsym(sym, init); // Generate global symbol definition
         }
 
         void freereg(Reg reg) {

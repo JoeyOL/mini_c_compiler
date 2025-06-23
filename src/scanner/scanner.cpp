@@ -202,6 +202,10 @@ bool Scanner::scan(Token& token) {
     } else if (c == '|') {
         if (next() == '|') token.type = T_LOGOR; 
         else goto Error;
+    } else if (c == '[') {
+        token.type = T_LBRACKET; // Assuming T_LBRACKET is defined in TokenType
+    } else if (c == ']') {
+        token.type = T_RBRACKET; // Assuming T_RBRACKET is defined in TokenType
     } else {
 Error:
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 

@@ -76,6 +76,16 @@ class VariableDeclareNode : public StatementNode {
             this->var_type = type; // Set the variable type
         }
 
+        std::string convertDimensionsToString() const {
+            std::string ret = "[";
+            for (int dim : dimensions) {
+                ret += std::to_string(dim) + "][";
+            }
+            ret.pop_back(); // Remove the last '['
+            ret += "]";
+            return ret; // Return the string representation of the dimensions
+        }
+
         std::string convertTypeToString(PrimitiveType type) const {
             switch (type) {
                 case P_INT: return "int";
@@ -88,6 +98,10 @@ class VariableDeclareNode : public StatementNode {
                 case P_CHARPTR: return "char*";
                 case P_LONGPTR: return "long*";
                 case P_VOIDPTR: return "void*";
+                case P_INTARR: return "int" + convertDimensionsToString();
+                case P_FLOATARR: return "float" + convertDimensionsToString();
+                case P_CHARARR: return "char" + convertDimensionsToString();
+                case P_LONGARR: return "long" + convertDimensionsToString();
                 default: return "unknown";
             }
         }
@@ -99,7 +113,7 @@ class VariableDeclareNode : public StatementNode {
             }
             std::cout << std::endl;
             for (const auto& [identifier, initializer] : initializers) {
-                std::cout << prettyPrint(prefix + "\t") << "Initializer for " << identifier << ": ";
+                std::cout << prettyPrint(prefix + "\t") << "Initializer for " << identifier << ": " << std::endl;
                 if (initializer) {
                     initializer->walk(prefix + "\t\t"); // Walk the initializer expression
                 } else {
@@ -135,7 +149,35 @@ class VariableDeclareNode : public StatementNode {
             return var_type; // Return the type of the variable
         }
 
+        void setArray(bool is_array) {
+            this->is_array = is_array; // Set whether the variable is an array
+            if (is_array) {
+                if (var_type == P_INT) {
+                    var_type = P_INTARR; // Set the type to int array
+                } else if (var_type == P_FLOAT) {
+                    var_type = P_FLOATARR; // Set the type to float array
+                } else if (var_type == P_CHAR) {
+                    var_type = P_CHARARR; // Set the type to char array
+                } else if (var_type == P_LONG) {
+                    var_type = P_LONGARR; // Set the type to long array
+                }
+            }
+        }
+
+        bool isArray() const {
+            return is_array; // Return whether the variable is an array
+        }
+
+        void addDimension(int dimension) {
+            dimensions.push_back(dimension); // Add a new dimension for array variables
+        }
+        std::vector<int> getDimensions() const {
+            return dimensions; // Return the dimensions for array variables
+        }
+
     private:
+        std::vector<int> dimensions = {}; // Dimensions for array variables
+        bool is_array = false;
         PrimitiveType var_type;
         int star_count; // 指针类型
         std::vector<std::string> identifiers;

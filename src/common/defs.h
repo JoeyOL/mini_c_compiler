@@ -56,7 +56,7 @@ static LabelAllocator labelAllocator; // Static label allocator for generating u
 
 
 enum TokenType {
-    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE,
+    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_LBRACKET, T_RBRACKET,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR, T_RETURN,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID, T_CHAR, T_FLOAT, T_LONG,
     T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_LOGAND, T_LOGOR, T_AMPER, T_AND, T_OR
@@ -65,12 +65,18 @@ enum TokenType {
 enum PrimitiveType {
     P_NONE,
     P_INT, P_FLOAT, P_VOID, P_STRING, P_CHAR, P_LONG,
-    P_INTPTR, P_FLOATPTR, P_CHARPTR, P_LONGPTR, P_VOIDPTR
+    P_INTPTR, P_FLOATPTR, P_CHARPTR, P_LONGPTR, P_VOIDPTR,
+    P_INTARR, P_FLOATARR, P_CHARARR, P_LONGARR
 };
 
 inline bool is_pointer(PrimitiveType type) {
     // Check if the type is a pointer type
     return type == P_CHARPTR || type == P_FLOATPTR || type == P_INTPTR || type == P_LONGPTR || type == P_VOIDPTR;
+}
+
+inline bool is_array(PrimitiveType type) {
+    // Check if the type is an array type
+    return type == P_INTARR || type == P_FLOATARR || type == P_CHARARR || type == P_LONGARR;
 }
 
 enum StmtType {
@@ -92,8 +98,20 @@ struct Symbol {
     std::string name;
     PrimitiveType type;
     int size;
+    bool is_array;
+    std::vector<int> array_dimensions; // Dimensions for array types, if applicable
     bool operator==(const std::string& other_name) const {
         return name == other_name;
+    }
+    int getArrayBaseOffset(int depth) const {
+        if (!is_array || depth >= array_dimensions.size()) {
+            throw std::runtime_error("Symbol::getArrayBaseOffset: Invalid depth for array dimensions");
+        }
+        int offset = size;
+        for (int i = 0; i <= depth; ++i) {
+            offset /= array_dimensions[i]; // Calculate the base offset based on dimensions
+        }
+        return offset;
     }
 };
 
@@ -116,10 +134,10 @@ struct SymbolTable {
 
     int typeToSize(PrimitiveType type) const {
         switch (type) {
-            case P_INT: return 4;
-            case P_FLOAT: return 8;
-            case P_CHAR: return 1;
-            case P_LONG: return 8;
+            case P_INT: case P_INTARR : return 4;
+            case P_FLOAT: case P_FLOATARR : return 8;
+            case P_CHAR: case P_CHARARR : return 1;
+            case P_LONG: case P_LONGARR : return 8;
             case P_VOIDPTR : case P_INTPTR: case P_FLOATPTR: case P_CHARPTR: case P_LONGPTR:
                 return 8; // Pointer size is typically 8 bytes on modern architectures
             default: throw std::runtime_error("SymbolTable::typeToSize: Unknown type");
@@ -132,7 +150,20 @@ struct SymbolTable {
                 throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
             }
         }
-        symbols.push_back({name, type, typeToSize(type)});
+        symbols.push_back({name, type, typeToSize(type), false, {}}); // Add a new symbol with no dimensions
+    }
+
+    void addSymbol(std::string name, PrimitiveType type, std::vector<int> dimensions) {
+        for (const auto& symbol : symbols) {
+            if (symbol.name == name) {
+                throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
+            }
+        }
+        int size = typeToSize(type);
+        for (int dim : dimensions) {
+            size *= dim; // Calculate the total size based on dimensions
+        }
+        symbols.push_back({name, type, size, true, dimensions});
     }
 
     Symbol getSymbol(std::string name) {
@@ -305,7 +336,7 @@ class ASTNode {
             return type; // Return the type of the value
         }
         virtual PrimitiveType getCalculateType() const {
-            if (is_pointer(type)) {
+            if (is_pointer(type) || is_array(type)) {
                 return P_LONG;
             }
             return type; // Return the calculated type of the AST node
@@ -318,6 +349,9 @@ class ASTNode {
         }
         virtual bool& isNeedTransform() {
             return need_transform; // Return whether the node needs transformation
+        }
+        void setPrimitiveType(PrimitiveType type) {
+            this->type = type; // Set the primitive type of the AST node
         }
     protected:
         PrimitiveType type; // Type of the AST node
@@ -356,17 +390,11 @@ class ExprNode: public StatementNode {
                 return offset; // If offset is set, return it
             }
             if (type_to_offset.find(this->type) == type_to_offset.end()) {
-                return 0; // If the type is not found in the map, return 0
+                return 1; // If the type is not found in the map, return 0
             }
             return type_to_offset.at(this->type); // Get the offset for the expression node
         }
-        void setLValue(bool lvalue) {
-            this->lvalue = lvalue; // Set whether the expression node is an lvalue
-        }
 
-        bool isLValue() const {
-            return lvalue; // Return whether the expression node is an lvalue
-        }
     protected:
         Value value; 
         int offset;
@@ -381,7 +409,6 @@ class ExprNode: public StatementNode {
             {P_LONGPTR, 8},
             {P_VOIDPTR, 0}
         };
-        bool lvalue = false; // Flag to indicate if the expression is an lvalue
 };
 
 
@@ -406,6 +433,8 @@ class ValueNode : public ExprNode {
                 return value.ivalue;
             } else if (value.type == P_FLOAT) {
                 return static_cast<int>(value.fvalue); // Convert float to int for simplicity
+            } else if (value.type == P_LONG) {
+                return static_cast<int>(value.lvalue); // Convert long to int for simplicity
             }
             throw std::runtime_error("ValueNode::getValue: Unknown value type");
         }
@@ -414,6 +443,28 @@ class ValueNode : public ExprNode {
                 return value.fvalue;
             } else if (value.type == P_INT) {
                 return static_cast<double>(value.ivalue); // Convert int to float for simplicity
+            } else if (value.type == P_LONG) {
+                return static_cast<double>(value.lvalue); // Convert long to float for simplicity
+            }
+            throw std::runtime_error("ValueNode::getValue: Unknown value type");
+        }
+        long getLongValue() const {
+            if (value.type == P_LONG) {
+                return value.lvalue;
+            } else if (value.type == P_INT) {
+                return static_cast<long>(value.ivalue); // Convert int to long for simplicity
+            } else if (value.type == P_FLOAT) {
+                return static_cast<long>(value.fvalue); // Convert float to long for simplicity
+            }
+            throw std::runtime_error("ValueNode::getValue: Unknown value type");
+        }
+        char getCharValue() const {
+            if (value.type == P_INT) {
+                return static_cast<char>(value.ivalue); // Convert int to char for simplicity
+            } else if (value.type == P_FLOAT) {
+                return static_cast<char>(value.fvalue); // Convert float to char for simplicity
+            } else if (value.type == P_LONG) {
+                return static_cast<char>(value.lvalue); // Convert long to char for simplicity
             }
             throw std::runtime_error("ValueNode::getValue: Unknown value type");
         }
@@ -438,13 +489,13 @@ static const std::map<ExprType, int> precedence = {
 
 // 目前只支持一层指针
 inline PrimitiveType pointTo(const PrimitiveType &type) {
-    if (type == P_INT) {
+    if (type == P_INT || type == P_INTARR) {
         return P_INTPTR; // Return pointer type for int
-    } else if (type == P_FLOAT) {
+    } else if (type == P_FLOAT || type == P_FLOATARR) {
         return P_FLOATPTR; // Return pointer type for float
-    } else if (type == P_CHAR) {
+    } else if (type == P_CHAR || type == P_CHARARR) {
         return P_CHARPTR; // Return pointer type for char
-    } else if (type == P_LONG) {
+    } else if (type == P_LONG || type == P_LONGARR) {
         return P_LONGPTR;
     } else if (type == P_VOID) {
         return P_VOIDPTR; // Return pointer type for void
@@ -455,10 +506,10 @@ inline PrimitiveType pointTo(const PrimitiveType &type) {
 // 获取指针指向的类型
 inline PrimitiveType valueAt(const PrimitiveType &type) {
     switch (type) {
-        case P_INTPTR: return P_INT; // Return int for int pointer
-        case P_FLOATPTR: return P_FLOAT; // Return float for float pointer
-        case P_CHARPTR: return P_CHAR; // Return char for char pointer
-        case P_LONGPTR: return P_LONG;
+        case P_INTPTR: case P_INTARR: return P_INT; // Return int for int pointer
+        case P_FLOATPTR: case P_FLOATARR : return P_FLOAT; // Return float for float pointer
+        case P_CHARPTR: case P_CHARARR: return P_CHAR; // Return char for char pointer
+        case P_LONGPTR: case P_LONGARR : return P_LONG;
         case P_VOIDPTR: return P_VOID; // Return void for void pointer
         default: throw std::runtime_error("VariableDeclareNode: Unknown type for value at pointer declaration");
     }
