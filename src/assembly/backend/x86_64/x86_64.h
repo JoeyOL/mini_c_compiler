@@ -118,7 +118,8 @@ public:
 
     Reg cgload(Value value) override {
         // Load the value into a register and return the register index
-        Reg reg = regManager->allocateRegister(value.type);
+        PrimitiveType type = value.type == P_STRING ? P_LONG : value.type; // Use P_CHARPTR for string values
+        Reg reg = regManager->allocateRegister(type);
         if (value.type == P_INT) {
             reg.type = P_INT;
             outputFile << "\tmovl\t$" << value.ivalue << ", " << regManager->getRegister(reg) << "\n";
@@ -129,6 +130,9 @@ public:
             reg.type = P_LONG;
             outputFile << "\tmovq\t$" << value.lvalue << ", " << regManager->getRegister(reg) << "\n";
             reg.type = value.type; // Restore the original type
+        } else if (value.type == P_STRING) {
+            std::string label = string_constants[value.strvalue];
+            outputFile << "\tleaq\t" << label << "(%rip), " << regManager->getRegister(reg) << "\n";
         } else {
             throw std::runtime_error("GenCode::cgload: Only Support int value type for loading into register");
         }
@@ -280,8 +284,16 @@ public:
             outputFile << "\t.double\t" << value << "\n"; // Store float as int
         }
     }
+    void cgstringconst() {
+        outputFile << ".section\t.data\n";
+        for (auto & [value, name] : string_constants) {
+            outputFile << name << ":\n";
+            outputFile << "\t.string\t\"" << value << "\"\n"; // Store string as a null-terminated string
+        }
+    }
     void cgpreamble() override {
         cgfloatconst(); // Generate float constants section
+        cgstringconst(); // Generate string constants section
         regManager->freeAllRegister(); // Free all registers at the start
         // outputFile<< "\t.text\n"
         //     ".LC0:\n"

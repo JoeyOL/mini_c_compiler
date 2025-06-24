@@ -116,6 +116,89 @@ Scanner::Scanner(const std::string& source_path)
     }
 }
 
+void Scanner::scanChar(Token& token, char c) {
+    char val;
+    c = next();
+    if (c == '\\') { // Handle escape sequences
+        c = next();
+        if (c == 'n') {
+            val = '\n';
+        } else if (c == 't') {
+            val = '\t';
+        } else if (c == '\\' || c == '\'') {
+            val = c; // Add escaped character
+        } else if (c == 'a') {
+            val = '\a'; // Bell character
+        } else if (c == 'b') {
+            val = '\b'; // Backspace
+        } else if (c == 'f') {
+            val = '\f'; // Form feed
+        } else if (c == 'r') {
+            val = '\r'; // Carriage return
+        } else if (c == 'v') {
+            val = '\v'; // Vertical tab
+        } else if (c == '\'') {
+            val = '\''; // Single quote
+        } else  {
+            throw std::runtime_error("Invalid escape sequence: \\" + std::string(1, c) 
+                                     + " at line " + std::to_string(line_no) 
+                                     + ", column " + std::to_string(column_no));
+        }
+    } else {
+        val = c; // Regular character
+    }
+    c = next();
+    if (c != '\'') {
+        throw std::runtime_error("Unterminated character literal at line " + std::to_string(line_no) 
+                                 + ", column " + std::to_string(column_no));
+    }
+    token.type = T_NUMBER; 
+    token.value.setIntValue(static_cast<int>(val)); 
+}
+
+void Scanner::scanString(Token& token, char c) {
+    std::string str_value;
+    c = next();
+    while (c != '"' && c != 0) {
+        if (c == '\\') { // Handle escape sequences
+            c = next();
+            if (c == 'n') {
+                str_value += '\n';
+            } else if (c == 't') {
+                str_value += '\t';
+            } else if (c == '\\' || c == '"') {
+                str_value += c; // Add escaped character
+            } else if (c == 'a') {
+                str_value += '\a'; // Bell character
+            } else if (c == 'b') {
+                str_value += '\b'; // Backspace
+            } else if (c == 'f') {
+                str_value += '\f'; // Form feed
+            } else if (c == 'r') {
+                str_value += '\r'; // Carriage return
+            } else if (c == 'v') {
+                str_value += '\v'; // Vertical tab
+            } else if (c == '\'') {
+                str_value += '\''; // Single quote
+            } else {
+                throw std::runtime_error("Invalid escape sequence: \\" + std::string(1, c) 
+                                         + " at line " + std::to_string(line_no) 
+                                         + ", column " + std::to_string(column_no));
+            }
+        } else {
+            str_value += c;
+        }
+        c = next();
+    }
+    if (c != '"') {
+        throw std::runtime_error("Unterminated string literal at line " + std::to_string(line_no) 
+                                 + ", column " + std::to_string(column_no));
+    }
+    token.type = T_STRING; // Assuming T_STRING is defined in TokenType
+    token.value.setStringValue(str_value); // Assuming setStringValue is defined
+    string_constants[str_value] = labelAllocator.getLabel(LableType::STRING_CONSTANT_LABEL); // Store string constant
+}
+
 void Scanner::scanIdentifier(Token& token, char c) { 
     // Handle identifiers or keywords
     std::string identifier;
@@ -206,6 +289,10 @@ bool Scanner::scan(Token& token) {
         token.type = T_LBRACKET; // Assuming T_LBRACKET is defined in TokenType
     } else if (c == ']') {
         token.type = T_RBRACKET; // Assuming T_RBRACKET is defined in TokenType
+    } else if (c == '"') {
+        scanString(token, c);
+    } else if (c == '\'') {
+        scanChar(token, c);
     } else {
 Error:
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 

@@ -45,4 +45,6 @@ class Scanner {
             }
             return false; // Not a keyword
         }
+        void scanString(Token& token, char c);
+        void scanChar(Token& token, char c);
 };

@@ -19,10 +19,12 @@ enum LableType {
     WHILE_LABEL,
     FOR_LABEL,
     FUNCT_LABEL,
-    FLOAT_CONSTANT_LABEL // Label type for float constants
+    FLOAT_CONSTANT_LABEL, // Label type for float constants
+    STRING_CONSTANT_LABEL // Label type for string constants
 };
 
 extern std::map<double, std::string> float_constants; // Map to store float constants for unique representation
+extern std::map<std::string, std::string> string_constants; // Map to store string constants for unique representation
 
 class LabelAllocator {
 public:
@@ -40,6 +42,8 @@ public:
         } else if (l == FLOAT_CONSTANT_LABEL) {
             // Generate a unique label for float constants
             return "FLOAT_CONST_" + std::to_string(floatConstantCounter++);
+        } else if (l = STRING_CONSTANT_LABEL) {
+            return "STRING_CONST_" + std::to_string(stringConstantCounter++);
         } else {
             throw std::runtime_error("LabelAllocator::getLabel: Unknown label type");
         }
@@ -51,6 +55,7 @@ private:
     int whileLabelCounter = 0;
     int forLabelCounter = 0;
     int floatConstantCounter = 0;
+    int stringConstantCounter = 0; // Counter for string constants
 };
 static LabelAllocator labelAllocator; // Static label allocator for generating unique labels
 
@@ -59,7 +64,8 @@ enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_LBRACKET, T_RBRACKET,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR, T_RETURN,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID, T_CHAR, T_FLOAT, T_LONG,
-    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_LOGAND, T_LOGOR, T_AMPER, T_AND, T_OR
+    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_LOGAND, T_LOGOR, T_AMPER, T_AND, T_OR,
+    T_STRING
 };
 
 enum PrimitiveType {
@@ -417,7 +423,8 @@ class ValueNode : public ExprNode {
     public:
         ValueNode(Value value) {
             this->value = value;
-            type = value.type; // Set the type based on the value
+            if (value.type != P_STRING) type = value.type; // Set the type based on the value
+            else type = P_CHARPTR;
         }
         ~ValueNode() = default;
         void walk(std::string prefix) override {
@@ -426,7 +433,11 @@ class ValueNode : public ExprNode {
                 std::cout << prettyPrint(prefix) << "Integer Literal: " << value.ivalue << std::endl;
             } else if (value.type == P_FLOAT) {
                 std::cout << prettyPrint(prefix) << "Float Literal: " << value.fvalue << std::endl;
-            }
+            } else if (value.type == P_STRING) {
+                std::cout << prettyPrint(prefix) << "String Literal: " << value.strvalue << std::endl;
+            } else if (value.type == P_LONG) {
+                std::cout << prettyPrint(prefix) << "Long Literal: " << value.lvalue << std::endl;
+            } 
         }
         int getIntValue() const {
             if (value.type == P_INT) {
@@ -467,6 +478,13 @@ class ValueNode : public ExprNode {
                 return static_cast<char>(value.lvalue); // Convert long to char for simplicity
             }
             throw std::runtime_error("ValueNode::getValue: Unknown value type");
+        }
+
+        char* getStringValue() const {
+            if (value.type == P_STRING) {
+                return const_cast<char*>(value.strvalue.c_str()); // Return string value as char*
+            } 
+            throw std::runtime_error("ValueNode::getStringValue: Unknown value type");
         }
 };
 

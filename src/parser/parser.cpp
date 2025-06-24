@@ -89,8 +89,6 @@ std::shared_ptr<ExprNode> Parser::prefixExpr() {
         }
         std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_DEREF, primary_node, type);
         return unary_node;
-        
-
     } else {
         return parimary(); // If no prefix operator, just parse the primary expression
     }
@@ -162,7 +160,7 @@ std::shared_ptr<ExprNode> Parser::parimary() {
         }
         consume();
         return ret;
-    } else if (tok.type == T_NUMBER) {
+    } else if (tok.type == T_NUMBER || tok.type == T_STRING) {
         return std::make_shared<ValueNode>(tok.value);
     } else if (tok.type == T_IDENTIFIER) {
         if (peek().type == T_LPAREN) {
@@ -235,7 +233,6 @@ std::shared_ptr<ExprNode> Parser::parseExpressionWithPrecedence(int prev_precede
                 return ret; // If no token is available, return the left node
             }
             left = std::move(ret); // Update left to the new binary expression node
-            
         }
     }
     return left;

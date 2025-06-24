@@ -9,8 +9,26 @@ void Semantic::check() {
     }
 }
 
+bool Semantic::checkLvalueValid(std::shared_ptr<ExprNode> lvalue) {
+    if (auto lvalue_type = std::dynamic_pointer_cast<LValueNode>(lvalue)) return true;
+    else if (auto unary_node = std::dynamic_pointer_cast<UnaryExpNode>(lvalue)) {
+        if (unary_node->getOp() == U_DEREF) {
+            // Dereference operation, check if the inner expression is a valid lvalue
+            return true;
+        }
+        else {
+            // Other unary operations are not valid lvalues
+            throw std::runtime_error("Semantic::checkLvalueValid: Invalid lvalue for assignment");
+        }
+    } else {
+        // If it's not an LValueNode or a valid unary expression, it's not a valid lvalue
+        throw std::runtime_error("Semantic::checkLvalueValid: Invalid lvalue for assignment");
+    }
+}
+
 void Semantic::checkAssignment(std::shared_ptr<AssignmentNode> node) {
     std::shared_ptr<ExprNode> lvalue = node->getLvalue();
+    assert(checkLvalueValid(lvalue)); // Ensure lvalue is valid for assignment
     checkExpression(lvalue);
     checkExpression(node->getExpr());
     if (!assignCompatible(lvalue->getPrimitiveType(), node->getExpr()->getPrimitiveType(), node->isNeedTransform())) {

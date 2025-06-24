@@ -1,4 +1,5 @@
 #include <stdio.h>
+// char *str = "Hello, World!";
 void printint(int x) {
   printf("%d\n", x);
 }
@@ -12,7 +13,7 @@ void printlong(long x) {
 }
 
 void printchar(char x) {
-  printf("%c\n", x);
+  printf("%c", x);
 }
 
 // double readfloat() {
