@@ -1,0 +1,27 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+for i in test/20_string_literals/input*
+do if [ ! -f "test/20_string_literals/out.${i##*/}" ]
+   then echo "Can't run test on ${i##*/}, no output file!"
+   else
+     echo -n ${i##*/}
+     ./build/comp $i 
+     cc -o output output.s src/lib/print.c
+     ./output > test/20_string_literals/trial.${i##*/}
+     sed -i 's/\r//' test/20_string_literals/out.${i##*/}
+     cmp -s "test/20_string_literals/out.${i##*/}" "test/20_string_literals/trial.${i##*/}"
+     if [ "$?" -eq "1" ]
+     then echo ": failed"
+       diff -c "test/20_string_literals/out.${i##*/}" "test/20_string_literals/trial.${i##*/}"
+       echo
+     else echo ": OK"
+     fi
+          rm -f output output.s "test/20_string_literals/trial.${i##*/}"
+   fi
+done
