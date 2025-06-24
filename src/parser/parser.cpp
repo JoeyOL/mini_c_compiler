@@ -89,6 +89,29 @@ std::shared_ptr<ExprNode> Parser::prefixExpr() {
         }
         std::shared_ptr<UnaryExpNode> unary_node = std::make_shared<UnaryExpNode>(U_DEREF, primary_node, type);
         return unary_node;
+    } else if (tok.type == T_PLUS || tok.type == T_MINUS || tok.type == T_NOT || tok.type == T_INVERT) {
+        consume(); // Consume the prefix operator token
+        return std::make_shared<UnaryExpNode>(tok.type, prefixExpr());
+    } else if (tok.type == T_INC || tok.type == T_DEC) {
+        consume();
+        auto expr_node = prefixExpr();
+        if (auto x = std::dynamic_pointer_cast<LValueNode>(expr_node)) {
+            // 如果是自增自减操作，必须是一个左值
+            return std::make_shared<UnaryExpNode>(tok.type == T_INC ? U_PREINC : U_PREDEC, x, x->getPrimitiveType());
+        } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(expr_node)) {
+            // 如果是自增自减操作，必须是一个左值
+            if (x->getOp() == U_DEREF) {
+                return std::make_shared<UnaryExpNode>(tok.type == T_INC ? U_PREINC : U_PREDEC, x, x->getPrimitiveType());
+            } else {
+                throw std::runtime_error("Parser::prefixExpr: Expected lvalue after prefix operator at line " + 
+                    std::to_string(tok.line_no) + ", column " + 
+                    std::to_string(tok.column_no));
+            }
+        } else {
+            throw std::runtime_error("Parser::prefixExpr: Expected lvalue after prefix operator at line " + 
+                std::to_string(tok.line_no) + ", column " + 
+                std::to_string(tok.column_no));
+        }
     } else {
         return parimary(); // If no prefix operator, just parse the primary expression
     }
@@ -149,9 +172,7 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
 
 std::shared_ptr<ExprNode> Parser::parimary() {
     const Token &tok = consume();
-    if (tok.type == T_PLUS || tok.type == T_MINUS || tok.type == T_NOT) {
-        return std::make_shared<UnaryExpNode>(tok.type, parimary());
-    } else if (tok.type == T_LPAREN) {
+    if (tok.type == T_LPAREN) {
         auto ret = parseExpressionWithPrecedence(0);
         if (current >= toks.size() || peek().type != T_RPAREN) {
             throw std::runtime_error("Parser::parimary: Expected ')' at line " + 
@@ -163,16 +184,40 @@ std::shared_ptr<ExprNode> Parser::parimary() {
     } else if (tok.type == T_NUMBER || tok.type == T_STRING) {
         return std::make_shared<ValueNode>(tok.value);
     } else if (tok.type == T_IDENTIFIER) {
+        std::shared_ptr<ExprNode> ret;
         if (peek().type == T_LPAREN) {
             putback(); // Put back the identifier token
-            return parseFunctionCall();
+            ret = parseFunctionCall();
         } else if (peek().type == T_LBRACKET) {
             putback();
-            return parseArrayAccess();
+            ret = parseArrayAccess();
         } else {
             Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
-            return std::make_shared<LValueNode>(sym);
+            ret = std::make_shared<LValueNode>(sym);
         }
+
+        // 解析后缀
+        if (peek().type == T_INC || peek().type == T_DEC) {
+            Token inc_dec_tok = consume(); // Consume the increment/decrement token
+            if (auto x = std::dynamic_pointer_cast<LValueNode>(ret)) {
+                // 如果是自增自减操作，必须是一个左值
+                return std::make_shared<UnaryExpNode>(inc_dec_tok.type == T_INC ? U_POSTINC : U_POSTDEC, x, x->getPrimitiveType());
+            } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(ret)) {
+                // 如果是自增自减操作，必须是一个左值
+                if (x->getOp() == U_DEREF) {
+                    return std::make_shared<UnaryExpNode>(inc_dec_tok.type == T_INC ? U_POSTINC : U_POSTDEC, x, x->getPrimitiveType());
+                } else {
+                    throw std::runtime_error("Parser::parimary: Expected lvalue after increment/decrement at line " + 
+                        std::to_string(tok.line_no) + ", column " + 
+                        std::to_string(tok.column_no));
+                }
+            } else {
+                throw std::runtime_error("Parser::parimary: Expected lvalue after increment/decrement at line " + 
+                    std::to_string(tok.line_no) + ", column " + 
+                    std::to_string(tok.column_no));
+            }
+        }
+        return ret; // Return the lvalue or function call node
     } else {
         throw std::runtime_error("Parser::parimary: Unexpected token type" + 
             std::to_string(tok.type) + " at line " + 
@@ -193,8 +238,11 @@ ExprType Parser::arithop(const Token &tok) {
         case T_LE: return A_LE;
         case T_GT: return A_GT;
         case T_GE: return A_GE;
-        case T_AND: return A_AND;
         case T_OR: return A_OR;
+        case T_AMPER : return A_AND; // '&' is treated as bitwise AND
+        case T_XOR: return A_XOR; // '^' is treated as bitwise XOR
+        case T_LSHIFT: return A_LSHIFT; // '<<' is treated as left
+        case T_RSHIFT: return A_RSHIFT; // '>>' is treated as right
         default:
             throw std::runtime_error("Parser::arithop: Unexpected token type " + 
                 std::to_string(tok.type) + " at line " + 

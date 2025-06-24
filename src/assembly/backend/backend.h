@@ -67,6 +67,15 @@ public:
     virtual Reg cgderef(Reg reg, PrimitiveType type) = 0;
     virtual Reg cgshlconst(Reg reg, int value) = 0;
     virtual Reg cgstorderef(Reg reg, Reg addr, PrimitiveType type) = 0;
-    
+    virtual void cginc(const char* identifier, PrimitiveType type) = 0;
+    virtual void cgdec(const char* identifier, PrimitiveType type) = 0;
+    virtual void cginc(Reg addr, PrimitiveType type) = 0;
+    virtual void cgdec(Reg addr, PrimitiveType type) = 0;
+    virtual Reg cginvert(Reg reg) = 0;
+    virtual Reg cgshl(Reg r1, Reg r2) = 0;
+    virtual Reg cgshr(Reg r1, Reg r2) = 0;
+    virtual Reg cgxor(Reg r1, Reg r2) = 0;
+    virtual Reg cgand(Reg r1, Reg r2) = 0;
+    virtual Reg cgor(Reg r1, Reg r2) = 0;
 };
 

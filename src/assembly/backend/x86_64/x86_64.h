@@ -824,6 +824,187 @@ public:
         }
     }
 
+    void cginc(const char* identifier, PrimitiveType type) override {
+        // Increment the value of the global variable by 1
+        if (type == P_INT) {
+            outputFile << "\tincb\t" << identifier << "(%rip)\n"; // Increment int value
+        } else if (type == P_CHAR) {
+            outputFile << "\tincl\t" << identifier << "(%rip)\n"; // Increment char value
+        } else if (type == P_LONG || type == P_CHARPTR) {
+            outputFile << "\tincq\t" << identifier << "(%rip)\n"; // Increment long value
+        } else if (type == P_FLOAT) {
+            Reg r1 = cgload(Value{ .type = P_FLOAT, .fvalue = 1.0f }); // Load float constant 1.0
+            Reg r2 = regManager->allocateRegister(P_FLOAT); // Allocate a register for the float value
+            outputFile << "\tmovsd\t" << identifier << "(%rip), " << regManager->getRegister(r2) << "\n"; // Load the float value from the global variable
+            outputFile << "\taddsd\t" << regManager->getRegister(r1) << ", " << regManager->getRegister(r2) << "\n"; // Add float value
+            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", " << identifier << "(%rip)\n"; // Store the incremented value back to the global variable
+            regManager->freeRegister(r1); // Free the register used for the float constant
+            regManager->freeRegister(r2); // Free the register used for the float value
+        } else if (type == P_INTPTR) {
+            outputFile << "\taddq\t$4, " << identifier << "(%rip)\n"; // Increment pointer by 4 bytes
+        } else if (type == P_FLOATPTR || type == P_LONGPTR) {
+            outputFile << "\taddq\t$8, " << identifier << "(%rip)\n";
+        } else {
+            throw std::runtime_error("GenCode::cginc: Unsupported type for incrementing global variable");
+        }
+    }
+
+    void cgdec(const char* identifier, PrimitiveType type) override {
+        // Decrement the value of the global variable by 1
+        if (type == P_INT) {
+            outputFile << "\tdecb\t" << identifier << "(%rip)\n"; // Decrement int value
+        } else if (type == P_CHAR) {
+            outputFile << "\tdecl\t" << identifier << "(%rip)\n"; // Decrement char value
+        } else if (type == P_LONG || type == P_CHARPTR) {
+            outputFile << "\tdecq\t" << identifier << "(%rip)\n"; // Decrement long value
+        } else if (type == P_FLOAT) {
+            Reg r1 = cgload(Value{ .type = P_FLOAT, .fvalue = 1.0f }); // Load float constant 1.0
+            Reg r2 = regManager->allocateRegister(P_FLOAT); // Allocate a register for the float value
+            outputFile << "\tmovsd\t" << identifier << "(%rip), " << regManager->getRegister(r2) << "\n"; // Load the float value from the global variable
+            outputFile << "\tsubsd\t" << regManager->getRegister(r1) << ", " << regManager->getRegister(r2) << "\n"; // Subtract float value
+            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", " << identifier << "(%rip)\n"; // Store the decremented value back to the global variable
+            regManager->freeRegister(r1); // Free the register used for the float constant
+            regManager->freeRegister(r2); // Free the register used for the float value
+        } else if (type == P_INTPTR) {
+            outputFile << "\tsubq\t$4, " << identifier << "(%rip)\n"; // Decrement pointer by 4 bytes
+        } else if (type == P_FLOATPTR || type == P_LONGPTR) {
+            outputFile << "\tsubq\t$8, " << identifier << "(%rip)\n";
+        } else {
+            throw std::runtime_error("GenCode::cgdec: Unsupported type for decrementing global variable");
+        }
+    }
+
+    void cginc(Reg addr, PrimitiveType type) override {
+        // Increment the value at the address pointed by the register by 1
+        if (type == P_INT) {
+            outputFile << "\tincb\t(" << regManager->getRegister(addr) << ")\n"; // Increment int value
+        } else if (type == P_CHAR) {
+            outputFile << "\tincl\t(" << regManager->getRegister(addr) << ")\n"; // Increment char value
+        } else if (type == P_LONG || type == P_CHARPTR) {
+            outputFile << "\tincq\t(" << regManager->getRegister(addr) << ")\n"; // Increment long value
+        } else if (type == P_FLOAT) {
+            Reg r1 = cgload(Value{ .type = P_FLOAT, .fvalue = 1.0f }); // Load float constant 1.0
+            Reg r2 = regManager->allocateRegister(P_FLOAT); // Allocate a register for the float value
+            outputFile << "\tmovsd\t(" << regManager->getRegister(addr) << "), " << regManager->getRegister(r2) << "\n"; // Load the float value from the address in addr
+            outputFile << "\taddsd\t" << regManager->getRegister(r1) << ", " << regManager->getRegister(r2) << "\n"; // Add float value
+            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", (" << regManager->getRegister(addr) << ")\n"; // Store the incremented value back to the address in addr
+            regManager->freeRegister(r1); // Free the register used for the float constant
+            regManager->freeRegister(r2); // Free the register used for the float value
+        } else if (type == P_INTPTR) {
+            outputFile << "\taddq\t$4, (" << regManager->getRegister(addr) << ")\n"; // Increment pointer by 4 bytes
+        } else if (type == P_FLOATPTR || type == P_LONGPTR) {
+            outputFile << "\taddq\t$8, (" << regManager->getRegister(addr) << ")\n";
+        } else {
+            throw std::runtime_error("GenCode::cginc: Unsupported type for incrementing dereferenced value");
+        }
+        regManager->freeRegister(addr); // Free the address register after use
+    }
+
+    void cgdec(Reg addr, PrimitiveType type) override {
+        // Decrement the value at the address pointed by the register by 1
+        if (type == P_INT) {
+            outputFile << "\tdecb\t(" << regManager->getRegister(addr) << ")\n"; // Decrement int value
+        } else if (type == P_CHAR) {
+            outputFile << "\tdecl\t(" << regManager->getRegister(addr) << ")\n"; // Decrement char value
+        } else if (type == P_LONG || type == P_CHARPTR) {
+            outputFile << "\tdecq\t(" << regManager->getRegister(addr) << ")\n"; // Decrement long value
+        } else if (type == P_FLOAT) {
+            Reg r1 = cgload(Value{ .type = P_FLOAT, .fvalue = 1.0f }); // Load float constant 1.0
+            Reg r2 = regManager->allocateRegister(P_FLOAT); // Allocate a register for the float value
+            outputFile << "\tmovsd\t(" << regManager->getRegister(addr) << "), " << regManager->getRegister(r2) << "\n"; // Load the float value from the address in addr
+            outputFile << "\tsubsd\t" << regManager->getRegister(r1) << ", " << regManager->getRegister(r2) << "\n"; // Subtract float value
+            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", (" << regManager->getRegister(addr) << ")\n"; // Store the decremented value back to the address in addr
+            regManager->freeRegister(r1); // Free the register used for the float constant
+            regManager->freeRegister(r2); // Free the register used for the float value
+        } else if (type == P_INTPTR) {
+            outputFile << "\tsubq\t$4, (" << regManager->getRegister(addr) << ")\n"; // Decrement pointer by 4 bytes
+        } else if (type == P_FLOATPTR || type == P_LONGPTR) {
+            outputFile << "\tsubq\t$8, (" << regManager->getRegister(addr) << ")\n";
+        } else {
+            throw std::runtime_error("GenCode::cgdec: Unsupported type for decrementing dereferenced value");
+        }
+    }
+
+    Reg cginvert(Reg reg) override {
+        if (reg.type == P_INT) {
+            outputFile << "\tnotl\t" << regManager->getRegister(reg) << "\n"; // Negate int value
+        } else if (reg.type == P_CHAR) {
+            outputFile << "\tnotb\t" << regManager->getRegister(reg) << "\n"; // Negate char value
+        } else if (reg.type == P_LONG) {
+            outputFile << "\tnotq\t" << regManager->getRegister(reg) << "\n"; // Negate long value
+        } else {
+            throw std::runtime_error("GenCode::cginvert: Unsupported type for negation");
+        }
+        return reg; // Return the register containing the negated value
+    }
+
+    Reg cgor(Reg r1, Reg r2) override {
+        if (r1.type != r2.type) {
+            throw std::runtime_error("GenCode::cgor: Registers must be of the same type for bitwise OR");
+        }
+        if (r1.type == P_INT) {
+            outputFile << "\torl\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise OR for int
+        } else if (r1.type == P_CHAR) {
+            outputFile << "\torb\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise OR for char
+        } else if (r1.type == P_LONG) {
+            outputFile << "\torq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise OR for long
+        } else {
+            throw std::runtime_error("GenCode::cgor: Unsupported type for bitwise OR");
+        }
+        regManager->freeRegister(r2); // Free the second register after use
+        return r1; // Return the register containing the result of the bitwise OR operation
+    }
+
+    Reg cgand(Reg r1, Reg r2) override {
+        if (r1.type != r2.type) {
+            throw std::runtime_error("GenCode::cgand: Registers must be of the same type for bitwise AND");
+        }
+        if (r1.type == P_INT) {
+            outputFile << "\tandl\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise AND for int
+        } else if (r1.type == P_CHAR) {
+            outputFile << "\tandb\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise AND for char
+        } else if (r1.type == P_LONG) {
+            outputFile << "\tandq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise AND for long
+        } else {
+            throw std::runtime_error("GenCode::cgand: Unsupported type for bitwise AND");
+        }
+        regManager->freeRegister(r2); // Free the second register after use
+        return r1; // Return the register containing the result of the bitwise AND operation
+    }
+
+    Reg cgxor(Reg r1, Reg r2) override {
+        if (r1.type != r2.type) {
+            throw std::runtime_error("GenCode::cgxor: Registers must be of the same type for bitwise XOR");
+        }
+        if (r1.type == P_INT) {
+            outputFile << "\txorl\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise XOR for int
+        } else if (r1.type == P_CHAR) {
+            outputFile << "\txorb\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise XOR for char
+        } else if (r1.type == P_LONG) {
+            outputFile << "\txorq\t" << regManager->getRegister(r2) << ", " << regManager->getRegister(r1) << "\n"; // Perform bitwise XOR for long
+        } else {
+            throw std::runtime_error("GenCode::cgxor: Unsupported type for bitwise XOR");
+        }
+        regManager->freeRegister(r2); // Free the second register after use
+        return r1; // Return the register containing the result of the bitwise XOR operation
+    }
+
+    Reg cgshl(Reg r1, Reg r2) override {
+        assert(r2.type == P_CHAR && r1.type == P_LONG);
+        outputFile << "\tmovb\t" << regManager->getRegisterLower8bit(r2) << ", %cl\n"; // Move the lower 8 bits of r2 to cl
+        outputFile << "\tshlq\t" << "%cl, " << regManager->getRegister(r1) << "\n"; // Shift left
+        regManager->freeRegister(r2); // Free the second register after use
+        return r1; // Return the register containing the shifted value
+    }
+
+    Reg cgshr(Reg r1, Reg r2) override {
+        assert(r2.type == P_CHAR && r1.type == P_LONG);
+        outputFile << "\tmovb\t" << regManager->getRegisterLower8bit(r2) << ", %cl\n"; // Move the lower 8 bits of r2 to cl
+        outputFile << "\tshrq\t" << "%cl, " << regManager->getRegister(r1) << "\n"; // Shift right
+        regManager->freeRegister(r2); // Free the second register after use
+        return r1; // Return the register containing the shifted value
+    }
+
 private:
     std::unique_ptr<X86RegisterManager> regManager; // Register manager for handling register allocation
     std::ofstream outputFile; // Output file stream for writing assembly code

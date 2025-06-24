@@ -41,7 +41,7 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         // Handle binary expression node
         Reg reg1 = walkExpr(x->getLeft());
         Reg reg2 = walkExpr(x->getRight());
-        assert(reg1.type == reg2.type); // Ensure both registers have the same type
+        // assert(reg1.type == reg2.type); // Ensure both registers have the same type
         Reg ret;
         switch (x->getOp()) {
             case A_ADD: return cgadd(reg1, reg2); // Add the two registers and return the result
@@ -54,6 +54,11 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
             case A_LE: ret = cglessequal(reg1, reg2); break;
             case A_GT: ret = cggreaterthan(reg1, reg2); break;
             case A_GE: ret = cggreaterequal(reg1, reg2); break;
+            case A_AND: ret = cgand(reg1, reg2); break; // Perform bitwise AND operation
+            case A_OR: ret = cgor(reg1, reg2); break; // Perform bitwise OR operation
+            case A_XOR: ret = cgxor(reg1, reg2); break; //
+            case A_LSHIFT: ret = cgshl(reg1, reg2); break; // Perform left shift operation
+            case A_RSHIFT: ret = cgshr(reg1, reg2); break; //
             default:
                 throw std::runtime_error("GenCode::generate: Unknown binary expression type");
         }
@@ -79,8 +84,43 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
             }
 
         }
+        if (x->getOp() == U_PREINC || x->getOp() == U_PREDEC) {
+            if (auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr())) {
+                if (x->getOp() == U_PREINC) {
+                    cginc(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Increment the register
+                } else if (x->getOp() == U_PREDEC) {
+                    cgdec(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Decrement the register
+                }
+            } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(x->getExpr())) {
+                assert(y->getOp() == U_DEREF); // Ensure the unary operation is dereference
+                Reg addr = walkExpr(y->getExpr()); // Walk the expression in the unary node
+                if (x->getOp() == U_PREINC) {
+                    cginc(addr, x->getPrimitiveType()); // Increment the address register
+                } else if (x->getOp() == U_PREDEC) {
+                    cgdec(addr, x->getPrimitiveType()); // Decrement the address register
+                }
+            }
+        }
     
         Reg reg = walkExpr(x->getExpr()); // Walk the expression in the unary node
+
+        if (x->getOp() == U_POSTINC || x->getOp() == U_POSTDEC) {
+            if (auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr())) {
+                if (x->getOp() == U_POSTINC) {
+                    cginc(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Increment the register
+                } else if (x->getOp() == U_POSTDEC) {
+                    cgdec(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Decrement the register
+                }
+            } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(x->getExpr())) {
+                assert(y->getOp() == U_DEREF); // Ensure the unary operation is dereference
+                Reg addr = walkExpr(y->getExpr()); // Walk the expression in the unary node
+                if (x->getOp() == U_POSTINC) {
+                    cginc(addr, x->getPrimitiveType()); // Increment the address register
+                } else if (x->getOp() == U_POSTDEC) {
+                    cgdec(addr, x->getPrimitiveType()); // Decrement the address register
+                }
+            }
+        }
         // Handle unary expression node
         if (x->getOp() == U_MINUS) {
             return cgneg(reg); // Load the integer value into a register
@@ -104,9 +144,10 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
                       rightreg= cgload(Value{.type = P_LONG, .ivalue = x->getOffset()});
                       return (cgmul(leftreg, rightreg));
             }
-        } else {
-            throw std::runtime_error("GenCode::generate: Unknown unary expression type");
+        } else if (x->getOp() == U_INVERT) {
+            return cginvert(reg); // Perform bitwise NOT operation
         }
+        return reg; // Return the register containing the result
     } else if (auto x = std::dynamic_pointer_cast<ValueNode>(ast)) {
         // Handle value node
         return cgload(x->getValue()); // Load the value into a register
@@ -163,6 +204,7 @@ void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string fa
         return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
     } else {
         Reg reg1 = walkExpr(ast); // Walk the expression in the condition
+        reg1.type = P_LONG; // Ensure the register is treated as a long integer
         Reg reg2 = cgload(Value{ .type = P_LONG, .ivalue = 0 }); // Load zero into a register
         return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
     }

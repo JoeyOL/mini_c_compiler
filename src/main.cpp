@@ -20,6 +20,7 @@ int main(int argc, char *argv[]) {
         output_file += argv[2]; // Allow user to specify output file
     }
     try {
+        float_constants[1.0] = labelAllocator.getLabel(FLOAT_CONSTANT_LABEL);
         Scanner scanner = Scanner(argv[1]);
         Token token;
         std::vector<Token> tokens;

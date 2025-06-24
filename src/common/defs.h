@@ -64,7 +64,7 @@ enum TokenType {
     T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_LBRACKET, T_RBRACKET,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR, T_RETURN,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID, T_CHAR, T_FLOAT, T_LONG,
-    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_LOGAND, T_LOGOR, T_AMPER, T_AND, T_OR,
+    T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_LOGAND, T_LOGOR, T_AMPER, T_OR, T_INVERT, T_INC, T_DEC, T_XOR, T_LSHIFT, T_RSHIFT,
     T_STRING
 };
 
@@ -91,12 +91,12 @@ enum StmtType {
 };
 
 enum ExprType {
-    A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE,
+    A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE, A_XOR, A_LSHIFT, A_RSHIFT,
     A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE, A_AND, A_OR, A_ASSIGN
 };
 
 enum UnaryOp {
-    U_PLUS, U_MINUS, U_NOT,
+    U_PLUS, U_MINUS, U_NOT, U_INVERT, U_PREINC, U_PREDEC, U_POSTINC, U_POSTDEC,
     U_ADDR, U_DEREF, U_TRANSFORM, U_SCALE
 };
 
@@ -491,17 +491,21 @@ class ValueNode : public ExprNode {
 
 
 static const std::map<ExprType, int> precedence = {
-    {A_ADD, 15},
-    {A_SUBTRACT, 15},
     {A_MULTIPLY, 20},
     {A_DIVIDE, 20},
-    {A_EQ, 5},
-    {A_NE, 5},
+    {A_ADD, 15},
+    {A_SUBTRACT, 15},
+    {A_LSHIFT, 12},
+    {A_RSHIFT, 12},
     {A_LT, 10},
     {A_GT, 10},
     {A_LE, 10},
     {A_GE, 10},
     {A_AND, 3},
+    {A_EQ, 5},
+    {A_NE, 5},
+    {A_AND, 4},
+    {A_XOR, 3},
     {A_OR, 2}
 };
 

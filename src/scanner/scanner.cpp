@@ -229,9 +229,17 @@ bool Scanner::scan(Token& token) {
     }
     
     if (c == '+') {
-        token.type = T_PLUS;
+        if (peek() == '+') {
+            next();
+            token.type = T_INC; // Increment operator
+        }
+        else token.type = T_PLUS;
     } else if (c == '-') {
-        token.type = T_MINUS;
+        if (peek() == '-') {
+            next();
+            token.type = T_DEC; // Decrement operator
+        }
+        else token.type = T_MINUS;
     } else if (c == '*') {
         token.type = T_STAR;
     } else if (c == '/') {
@@ -255,13 +263,19 @@ bool Scanner::scan(Token& token) {
     } else if (c == ',') {
         token.type = T_COMMA;
     } else if (c == '<') {
-        if (peek() == '=') {
+        if (peek() == '<') {
+            next();
+            token.type = T_LSHIFT; // Left shift operator
+        } else if (peek() == '=') {
             next();
             token.type = T_LE;
         }
         else token.type = T_LT;
     } else if (c == '>') {
-        if (peek() == '=') {
+        if (peek() == '>') {
+            next();
+            token.type = T_RSHIFT; // Right shift operator
+        } else if (peek() == '=') {
             next();
             token.type = T_GE;
         }
@@ -284,7 +298,7 @@ bool Scanner::scan(Token& token) {
         token.type = T_AMPER;
     } else if (c == '|') {
         if (next() == '|') token.type = T_LOGOR; 
-        else goto Error;
+        else token.type = T_OR; // Assuming T_OR is defined in TokenType
     } else if (c == '[') {
         token.type = T_LBRACKET; // Assuming T_LBRACKET is defined in TokenType
     } else if (c == ']') {
@@ -293,6 +307,10 @@ bool Scanner::scan(Token& token) {
         scanString(token, c);
     } else if (c == '\'') {
         scanChar(token, c);
+    } else if (c == '~') {
+        token.type = T_INVERT;
+    } else if (c == '^') {
+        token.type = T_XOR; // Assuming T_XOR is defined in TokenType
     } else {
 Error:
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 

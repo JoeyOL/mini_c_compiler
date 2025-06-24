@@ -33,7 +33,11 @@ class BinaryExpNode : public ExprNode {
                 {A_GE, "Greater Than or Equal"},
                 {A_AND, "And"},
                 {A_OR, "Or"},
-                {A_ASSIGN, "Assignment"}
+                {A_ASSIGN, "Assignment"},
+                {A_XOR, "XOR"},
+                {A_LSHIFT, "Left Shift"},
+                {A_RSHIFT, "Right Shift"},
+
             };
             auto it = typeToString.find(op);
             if (it != typeToString.end()) {
@@ -75,7 +79,7 @@ class BinaryExpNode : public ExprNode {
         }
 
         void updateTypeAfterCal() {
-            if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE) {
+            if (op == A_GE || op == A_GT || op == A_LE || op == A_LT || op == A_EQ || op == A_NE || op == A_LSHIFT || op == A_RSHIFT) {
                 type = P_LONG; // Comparison operations return an integer type
             }
             else if (is_pointer(left->getPrimitiveType()) || is_pointer(right->getPrimitiveType())) {
@@ -115,6 +119,8 @@ class UnaryExpNode : public ExprNode {
                 op = U_MINUS;
             } else if (tok == T_NOT) {
                 op = U_NOT;
+            } else if (tok == T_INVERT) {
+                op = U_INVERT;
             } else {
                 throw std::runtime_error("UnaryExpNode: Unknown token type for unary operation");
             }
@@ -149,6 +155,14 @@ class UnaryExpNode : public ExprNode {
                     return "Transform, Target Type: " + std::to_string(type);
                 case U_SCALE:
                     return "Scale, Offset: " + std::to_string(getOffset());
+                case U_PREINC:
+                    return "Pre-increment";
+                case U_PREDEC:
+                    return "Pre-decrement";
+                case U_POSTINC:
+                    return "Post-increment";
+                case U_POSTDEC:
+                    return "Post-decrement";
                 default:
                     return "Unknown Unary Type";
             }
@@ -166,7 +180,7 @@ class UnaryExpNode : public ExprNode {
         }
         void updateType() {
             if (op != U_TRANSFORM && op != U_ADDR && op != U_DEREF) type = expr->getPrimitiveType();
-            if (op == U_SCALE) type = P_LONG; // Scale operation always results in a long type
+            if (op == U_SCALE || op == U_NOT) type = P_LONG; // Scale operation always results in a long type
         }
     private:
         UnaryOp op;

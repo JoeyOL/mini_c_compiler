@@ -240,17 +240,33 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
 
         // 获取计算类型
         x->updateCalType();
-        typeCompatible(x->getCalType(), x->getRight()->getCalculateType(), x->getRight()->isNeedTransform());
-        typeCompatible(x->getCalType(), x->getLeft()->getCalculateType(), x->getLeft()->isNeedTransform());
-
-
-        // 如果需要转换，创建一个unary表达式节点
-        if (x->getRight()->isNeedTransform() || x->getLeft()->isNeedTransform()) {
-            if (x->getRight()->isNeedTransform()) {
-                x->setRight(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getRight(), x->getCalType()));
+        // 对于左移和右移操作，确保将左值转化为long， 右值转换为char
+        if (x->getOp() == A_LSHIFT || x->getOp() == A_RSHIFT) {
+            if (!typeCompatible(x->getLeft()->getPrimitiveType(), P_LONG, x->getLeft()->isNeedTransform())) {
+                throw std::runtime_error("Semantic::checkExpression: Left operand of shift must be long");
             }
-            if (x->getLeft()->isNeedTransform()) {
-                x->setLeft(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getLeft(), x->getCalType()));
+            if (!typeCompatible(x->getRight()->getPrimitiveType(), P_CHAR, x->getRight()->isNeedTransform())) {
+                throw std::runtime_error("Semantic::checkExpression: Right operand of shift must be char");
+            }
+            if (x->getRight()->isNeedTransform() || x->getLeft()->isNeedTransform()) {
+                if (x->getRight()->isNeedTransform()) {
+                    x->setRight(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getRight(), P_CHAR));
+                }
+                if (x->getLeft()->isNeedTransform()) {
+                    x->setLeft(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getLeft(), P_LONG));
+                }
+            }
+        } else {
+            typeCompatible(x->getCalType(), x->getRight()->getCalculateType(), x->getRight()->isNeedTransform());
+            typeCompatible(x->getCalType(), x->getLeft()->getCalculateType(), x->getLeft()->isNeedTransform());
+            // 如果需要转换，创建一个unary表达式节点
+            if (x->getRight()->isNeedTransform() || x->getLeft()->isNeedTransform()) {
+                if (x->getRight()->isNeedTransform()) {
+                    x->setRight(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getRight(), x->getCalType()));
+                }
+                if (x->getLeft()->isNeedTransform()) {
+                    x->setLeft(std::make_shared<UnaryExpNode>(U_TRANSFORM, x->getLeft(), x->getCalType()));
+                }
             }
         }
 
@@ -274,6 +290,9 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
     } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(node)) {
         // Value nodes are already checked during parsing
         checkExpression(x->getExpr()); // Recursively check the operand of the unary expression
+        if (x->getOp() == U_INVERT && x->getExpr()->getPrimitiveType() == P_FLOAT) {
+            throw std::runtime_error("Semantic::checkExpression: Bitwise NOT operator can only be applied to int");
+        }
         x->updateType();
     } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(node)) {
         checkAssignment(x);

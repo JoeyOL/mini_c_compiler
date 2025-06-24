@@ -205,6 +205,36 @@ class GenCode {
         Reg cgstorderef(Reg reg, Reg addr, PrimitiveType type) {
             return assemblyCode->cgstorderef(reg, addr, type);
         }
+        void cginc(const char *identifier, PrimitiveType type) {
+            assemblyCode->cginc(identifier, type);
+        }
+        void cgdec(const char *identifier, PrimitiveType type) {
+            assemblyCode->cgdec(identifier, type);
+        }
+        void cginc(Reg addr, PrimitiveType type) {
+            assemblyCode->cginc(addr, type);
+        }
+        void cgdec(Reg addr, PrimitiveType type) {
+            assemblyCode->cgdec(addr, type);
+        }
+        Reg cginvert(Reg reg) {
+            return assemblyCode->cginvert(reg);
+        }
+        Reg cgand(Reg reg1, Reg reg2) {
+            return assemblyCode->cgand(reg1, reg2);
+        }
+        Reg cgor(Reg reg1, Reg reg2) {
+            return assemblyCode->cgor(reg1, reg2);
+        }
+        Reg cgxor(Reg reg1, Reg reg2) {
+            return assemblyCode->cgxor(reg1, reg2);
+        }
+        Reg cgshl(Reg reg1, Reg reg2) {
+            return assemblyCode->cgshl(reg1, reg2);
+        }
+        Reg cgshr(Reg reg1, Reg reg2) {
+            return assemblyCode->cgshr(reg1, reg2);
+        }
         Reg walkPragram(const std::shared_ptr<Pragram>& ast);
         Reg walkStatement(const std::shared_ptr<StatementNode>& ast);
         Reg walkExpr(const std::shared_ptr<ExprNode>& ast);
