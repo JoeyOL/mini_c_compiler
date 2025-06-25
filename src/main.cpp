@@ -9,6 +9,7 @@
 SymbolTable symbol_table;
 std::map<double, std::string> float_constants; // Map to store float literals
 std::map<std::string, std::string> string_constants; // Map to store string literals
+LabelAllocator labelAllocator; // Static label allocator for generating unique labels
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
