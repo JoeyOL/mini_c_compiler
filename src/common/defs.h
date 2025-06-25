@@ -57,7 +57,7 @@ private:
     int floatConstantCounter = 0;
     int stringConstantCounter = 0; // Counter for string constants
 };
-static LabelAllocator labelAllocator; // Static label allocator for generating unique labels
+extern LabelAllocator labelAllocator; // Static label allocator for generating unique labels
 
 
 enum TokenType {
@@ -105,9 +105,11 @@ struct Symbol {
     PrimitiveType type;
     int size;
     bool is_array;
+    bool is_global;
+    int pos_in_stack; // Position in stack for local variables, if applicable
     std::vector<int> array_dimensions; // Dimensions for array types, if applicable
-    bool operator==(const std::string& other_name) const {
-        return name == other_name;
+    bool operator==(const Symbol &other_name) const {
+        return name == other_name.name;
     }
     int getArrayBaseOffset(int depth) const {
         if (!is_array || depth >= array_dimensions.size()) {
@@ -119,23 +121,37 @@ struct Symbol {
         }
         return offset;
     }
+    std::string getAddress() const {
+        // Generate a string representation of the symbol's address
+        if (is_global) return name + "(%rip)";
+        else {
+            if (size < 4) return std::to_string(pos_in_stack + 4 - size) + "(%rbp)"; // Assuming %rbp is the base pointer for local variables
+            return std::to_string(pos_in_stack) + "(%rbp)"; // Assuming %rbp is the base pointer for local variables
+        }
+    }
 };
 
 struct Function {
     std::string name;
     PrimitiveType return_type;
     bool has_return;
+    int stack_size; // Size of the stack frame for the function
 };
 
 struct SymbolTable {
-    std::vector<Symbol> symbols;
+    
+    std::vector<std::vector<Symbol>> symbols;
     std::vector<Function> functions;
     Function current_function; // Current function being processed
+    int offset_on_stack; // Offset for local variables in the stack
+    int current_scope; // Current scope level, starting from 0
     SymbolTable() {
         addFunction("printint", P_VOID); // Add built-in function for printing integers
         addFunction("printfloat", P_VOID); // Add built-in function for printing floats
         addFunction("printchar", P_VOID); // Add built-in function for printing characters
         addFunction("printlong", P_VOID); // Add built-in function for printing long integers
+        symbols.push_back({}); // Initialize the first scope with an empty vector of symbols
+        current_scope = 0; // Start with the global scope
     };
 
     int typeToSize(PrimitiveType type) const {
@@ -149,18 +165,27 @@ struct SymbolTable {
             default: throw std::runtime_error("SymbolTable::typeToSize: Unknown type");
         }
     }
+    void enterScope() {
+        symbols.push_back({}); // Create a new scope by adding an empty vector of symbols
+        current_scope++;
+    }
+
     // TODO: 作用域
     void addSymbol(std::string name, PrimitiveType type) {
-        for (const auto& symbol : symbols) {
+        auto &scope = symbols.back(); // Get the current scope's symbols
+        for (const auto& symbol : scope) {
             if (symbol.name == name) {
                 throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
             }
         }
-        symbols.push_back({name, type, typeToSize(type), false, {}}); // Add a new symbol with no dimensions
+        int size = typeToSize(type);
+        offset_on_stack -= size < 4 ? 4 : size;// Decrease the stack offset for the new symbol
+        scope.push_back({name, type, typeToSize(type), false, current_scope == 0, offset_on_stack, {}}); // Add a new symbol with no dimensions
     }
 
     void addSymbol(std::string name, PrimitiveType type, std::vector<int> dimensions) {
-        for (const auto& symbol : symbols) {
+        auto &scope = symbols.back(); // Get the current scope's symbols
+        for (const auto& symbol : scope) {
             if (symbol.name == name) {
                 throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
             }
@@ -169,13 +194,17 @@ struct SymbolTable {
         for (int dim : dimensions) {
             size *= dim; // Calculate the total size based on dimensions
         }
-        symbols.push_back({name, type, size, true, dimensions});
+        offset_on_stack -= size < 4 ? 4 : size; // Decrease the stack offset for the new symbol
+        scope.push_back({name, type, size, true, current_scope == 0, offset_on_stack, dimensions});
     }
 
     Symbol getSymbol(std::string name) {
-        for (const auto& symbol : symbols) {
-            if (symbol.name == name) {
-                return symbol; // Return the found symbol
+        for (auto it = symbols.rbegin(); it != symbols.rend(); ++it) {
+            const auto& scope = *it; // Iterate through scopes from the most recent to the oldest
+            for (const auto& symbol : scope) {
+                if (symbol.name == name) {
+                    return symbol; // Return the found symbol
+                }
             }
         }
         throw std::runtime_error("SymbolTable::getSymbol: Symbol not found: " + name);
@@ -187,8 +216,33 @@ struct SymbolTable {
                 throw std::runtime_error("SymbolTable::addFunction: Function already exists: " + name);
             }
         }
-        functions.push_back({name, return_type, false});
+        functions.push_back({name, return_type, false, 8});
     }
+
+    void enterFunction() {
+        symbols.push_back({}); // Create a new scope for the function
+        current_scope++; // Increment the current scope level
+        offset_on_stack = -8; // Reset the stack offset for the new function scope
+    }
+
+    void exitScope() {
+        if (current_scope == 0) {
+            throw std::runtime_error("SymbolTable::exitScope: Cannot exit global scope");
+        }
+        symbols.pop_back(); // Remove the current scope
+        current_scope--; // Decrement the current scope level
+    }
+
+    void exitFuction() {
+        if (current_scope == 0) {
+            throw std::runtime_error("SymbolTable::exitFunctionScope: Cannot exit global scope");
+        }
+        symbols.pop_back(); // Remove the current function scope
+        current_scope--; // Decrement the current scope level
+        functions.back().stack_size = -offset_on_stack; // Set the stack size for the function
+        functions.back().stack_size += functions.back().stack_size % 16 ? 16 - functions.back().stack_size % 16 : 0;
+    }
+
     Function getFunction(std::string name) {
         for (const auto& func : functions) {
             if (func.name == name) {

@@ -188,12 +188,13 @@ std::shared_ptr<ExprNode> Parser::parimary() {
         if (peek().type == T_LPAREN) {
             putback(); // Put back the identifier token
             ret = parseFunctionCall();
-        } else if (peek().type == T_LBRACKET) {
-            putback();
-            ret = parseArrayAccess();
         } else {
             Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
-            ret = std::make_shared<LValueNode>(sym);
+            if (peek().type == T_LBRACKET || sym.is_array) {
+                putback();
+                ret = parseArrayAccess();
+            }
+            else ret = std::make_shared<LValueNode>(sym);
         }
 
         // 解析后缀
@@ -320,6 +321,7 @@ std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() {
 }
 
 std::shared_ptr<BlockNode> Parser::parseBlock() { 
+    symbol_table.enterScope(); // Enter a new scope for the block
     std::shared_ptr<BlockNode> stmts = std::make_shared<BlockNode>();
     assert(consume().type == T_LBRACE);
     while (current < toks.size() && peek().type != T_RBRACE) {
@@ -362,6 +364,7 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
         }
     }
     assert(consume().type == T_RBRACE);
+    symbol_table.exitScope(); // Exit the scope after parsing the block
     return stmts;
 }
 
@@ -434,6 +437,11 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
             var_decl->setArray(true); // Set the variable as an array
         }
 
+        if (!var_decl->isArray()) symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
+        else symbol_table.addSymbol(var_name, var_decl->getVariableType(), var_decl->getDimensions()); // Add the variable to the symbol table with its dimensions
+
+        Symbol sym = symbol_table.getSymbol(var_name); // Get the symbol from the symbol table
+
         if (peek().type == T_ASSIGN) {
             consume();
             std::shared_ptr<ExprNode> initializer;
@@ -442,15 +450,16 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
                 auto dims = var_decl->getDimensions();
                 initializer = parseArrayInitializer(dims, 0);
                 initializer->setPrimitiveType(valueAt(var_decl->getVariableType())); // Set the primitive type of the initializer
+                auto y = std::dynamic_pointer_cast<ArrayInitializer>(initializer);
+                y->setBaseOffset(sym.pos_in_stack);
             }
-            var_decl->addIdentifier(var_name, std::move(initializer));
+            var_decl->addIdentifier(sym, std::move(initializer));
         } else {
-            var_decl->addIdentifier(var_name);
+            var_decl->addIdentifier(sym);
         }
 
         // 添加到符号表
-        if (!var_decl->isArray()) symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
-        else symbol_table.addSymbol(var_name, var_decl->getVariableType(), var_decl->getDimensions()); // Add the variable to the symbol table with its dimensions
+
     } while (current < toks.size() && consume().type == T_COMMA);
     putback(); // Put back the last token, which should be a semicolon or end of statement
     return var_decl;
@@ -514,6 +523,7 @@ std::shared_ptr<StatementNode> Parser::parseSingleStatement() {
 
 
 std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
+    symbol_table.enterScope();
     assert(consume().type == T_FOR);
     assert(consume().type == T_LPAREN);
     std::shared_ptr<StatementNode> preop_stmt = parseSingleStatement();
@@ -523,12 +533,14 @@ std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
     std::shared_ptr<StatementNode> postop_stmt = parseSingleStatement();
     assert(consume().type == T_RPAREN);
     std::shared_ptr<BlockNode> body = parseBlock();
+    symbol_table.exitScope(); // Exit the scope after parsing the for statement
     return std::make_shared<ForStatementNode>(std::move(preop_stmt), std::move(condition), std::move(body), std::move(postop_stmt));
 }
 
 
 // TODO: 目前只支持void类型的无参数函数
 std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
+    symbol_table.enterFunction();
     assert(peek().type == T_VOID || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG || peek().type == T_INT);
     TokenType return_type = consume().type; // Get the return type of the function
     if (current >= toks.size() || peek().type != T_IDENTIFIER) {
@@ -542,6 +554,7 @@ std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
     std::shared_ptr<BlockNode> body = parseBlock();
     auto ret = std::make_shared<FunctionDeclareNode>(func_name, return_type, std::move(body));
     symbol_table.addFunction(func_name, ret->getReturnType()); // Add the function to the symbol table
+    symbol_table.exitFuction(); // Exit the function scope after parsing the function declaration
     return ret;
 }
 

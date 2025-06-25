@@ -56,7 +56,7 @@ void Semantic::checkVariableDeclare(std::shared_ptr<VariableDeclareNode> node) {
 
             checkExpression(initializer);
             if (!assignCompatible(var_type, initializer->getPrimitiveType(), initializer->isNeedTransform())) {
-                throw std::runtime_error("Semantic::checkVariableDeclare: Type mismatch for initializer of " + identifier);
+                throw std::runtime_error("Semantic::checkVariableDeclare: Type mismatch for initializer of " + identifier.name);
             }
             if (initializer->isNeedTransform()) {
                 initializer = std::make_shared<UnaryExpNode>(U_TRANSFORM, initializer, var_type);

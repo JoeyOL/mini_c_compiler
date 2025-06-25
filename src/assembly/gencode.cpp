@@ -67,29 +67,28 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
     } else if (auto x = std::dynamic_pointer_cast<UnaryExpNode>(ast)) {
         if (x->getOp() == U_ADDR || x->getOp() == U_DEREF) {
             auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr());
-            if (!y->isArray()) {
+            if (y != nullptr && !y->isArray()) {
                 if (x->getOp() == U_ADDR) {
-                    return cgaddress(y->getIdentifier().name.c_str()); // Get the address of the identifier
+                    return cgaddress(y->getIdentifier()); // Get the address of the identifier
                 } else if (x->getOp() == U_DEREF) {
-                    Reg reg = cgloadglob(y->getIdentifier().name.c_str(), y->getCalculateType()); // Load the global variable into a register
+                    Reg reg = cgloadsym(y->getIdentifier(), y->getCalculateType()); // Load the global variable into a register
                     return cgderef(reg, y->getPrimitiveType()); // Dereference the pointer to get the value
                 }
             } else {
-                Reg base = walkExpr(y); // For array, just walk the expression, 得到数据指针 
+                Reg base = walkExpr(x->getExpr()); // For array, just walk the expression, 得到数据指针 
                 if (x->getOp() == U_ADDR) return base;
                 else if (x->getOp() == U_DEREF) {
                     // Dereference the pointer to get the value
                     return cgderef(base, x->getExpr()->getPrimitiveType());
                 }
             }
-
         }
         if (x->getOp() == U_PREINC || x->getOp() == U_PREDEC) {
             if (auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr())) {
                 if (x->getOp() == U_PREINC) {
-                    cginc(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Increment the register
+                    cginc(y->getIdentifier(), y->getIdentifier().type); // Increment the register
                 } else if (x->getOp() == U_PREDEC) {
-                    cgdec(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Decrement the register
+                    cgdec(y->getIdentifier(), y->getIdentifier().type); // Decrement the register
                 }
             } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(x->getExpr())) {
                 assert(y->getOp() == U_DEREF); // Ensure the unary operation is dereference
@@ -107,9 +106,9 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         if (x->getOp() == U_POSTINC || x->getOp() == U_POSTDEC) {
             if (auto y = std::dynamic_pointer_cast<LValueNode>(x->getExpr())) {
                 if (x->getOp() == U_POSTINC) {
-                    cginc(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Increment the register
+                    cginc(y->getIdentifier(), y->getIdentifier().type); // Increment the register
                 } else if (x->getOp() == U_POSTDEC) {
-                    cgdec(y->getIdentifier().name.c_str(), y->getIdentifier().type); // Decrement the register
+                    cgdec(y->getIdentifier(), y->getIdentifier().type); // Decrement the register
                 }
             } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(x->getExpr())) {
                 assert(y->getOp() == U_DEREF); // Ensure the unary operation is dereference
@@ -153,20 +152,23 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         return cgload(x->getValue()); // Load the value into a register
     } else if (auto x = std::dynamic_pointer_cast<LValueNode>(ast)) {
         // 在这一步，指针类型会被转换为P_LONG寄存器
-        if (!x->isArray()) return cgloadglob(x->getIdentifier().name.c_str(), x->getCalculateType()); // Load the global variable into a register
+        if (!x->isArray()) return cgloadsym(x->getIdentifier(), x->getCalculateType()); // Load the global variable into a register
         else {
-            Reg index = walkExpr(x->getIndex()); // Walk the index expression
-            assert(index.type == P_INT);
-            index.type = P_LONG; // Ensure the index is treated as a long integer
-            Reg base = cgaddress(x->getIdentifier().name.c_str()); // Load the base address of the array into a register
-            return cgadd(base, index);
+            Reg base = cgaddress(x->getIdentifier()); // Load the base address of the array into a register
+            if (x->getIndex() != nullptr){
+                Reg index = walkExpr(x->getIndex()); // Walk the index expression
+                assert(index.type == P_INT);
+                index.type = P_LONG; // Ensure the index is treated as a long integer
+                return cgadd(base, index);
+            }
+            return base;
         }
     } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(ast)) {
         // Handle assignment node
         Reg reg = walkExpr(x->getExpr()); // Walk the expression in the assignment node
 
         if (auto y = std::dynamic_pointer_cast<LValueNode>(x->getLvalue())) {
-            cgstorglob(reg, y->getIdentifier().name.c_str(), x->getCalculateType());
+            cgstorsym(reg, y->getIdentifier(), x->getCalculateType());
         } else if (auto y = std::dynamic_pointer_cast<UnaryExpNode>(x->getLvalue())) {
             assert(y->getOp() == U_DEREF); // Ensure the unary operation is dereference
             Reg addr = walkExpr(y->getExpr()); // Walk the expression in the unary node
@@ -210,6 +212,34 @@ void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string fa
     }
 }
 
+void GenCode::localArrayInit(const std::shared_ptr<ArrayInitializer>& y) {
+    y->getValuePos();
+    PrimitiveType type = y->getPrimitiveType();
+    auto exprs = y->getElements();
+    auto pos = y->getPosOnStack();
+    for (int i = 0; i < exprs.size(); i++) {
+        if (auto z = std::dynamic_pointer_cast<ValueNode>(exprs[i])) {
+            Symbol sym = {"", type, 5, false, false, pos[i]};
+            Reg reg;
+            if (type == P_INT) {
+                reg = cgload(Value{.type = P_INT, .ivalue = z->getIntValue()}); // Load the integer value into a register
+            } else if (type == P_FLOAT) {
+                reg = cgload(Value{.type = P_FLOAT, .fvalue = z->getFloatValue()}); // Load the float value into a register
+            } else if (type == P_LONG) {
+                reg = cgload(Value{.type = P_LONG, .lvalue = z->getLongValue()}); // Load the long value into a register
+            } else if (type == P_CHAR) {
+                reg = cgload(Value{.type = P_CHAR, .ivalue = z->getCharValue()}); // Load the char value into a register
+            } else {
+                throw std::runtime_error("GenCode::walkStatement: Unknown array element type");
+            }
+            cgstorsym(reg, sym, type); // Store the value in the global variable
+            assemblyCode->freereg(reg); // Free the register after use
+        } else if (auto z = std::dynamic_pointer_cast<ArrayInitializer>(exprs[i])) {
+            localArrayInit(z); 
+        }
+    }
+}
+
 Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
     if (auto x = std::dynamic_pointer_cast<BlockNode>(ast)) {
         std::string block_label = labelAllocator.getLabel(LableType::BLOCK_LABEL);
@@ -227,14 +257,22 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<VariableDeclareNode>(ast)) {
         for (const auto& identifier: x->getIdentifiers()) {
-            Symbol sym = symbol_table.getSymbol(identifier); // Get the symbol from the symbol table
-            cglocalsym(sym); // Declare a global variable with the given identifier and type
+            
+            cglocalsym(identifier); // Declare a global variable with the given identifier and type
             auto initializer = x->getInitializer(identifier);
-            if (initializer != nullptr) {
+            if (initializer == nullptr) return Reg{.type = P_NONE, .idx = 0};
+            if (!identifier.is_array) {
                 Reg reg = walkExpr(initializer);
-                cgstorglob(reg, identifier.c_str(), x->getVariableType()); // Store the value in the global variable
+                cgstorsym(reg, identifier, x->getVariableType()); // Store the value in the global variable
                 assemblyCode->freereg(reg);
+            } else {
+                if (auto y = std::dynamic_pointer_cast<ArrayInitializer>(initializer)) {
+                    localArrayInit(y); // Initialize the local array variable
+                } else {
+                    throw std::runtime_error("GenCode::walkStatement: Array initializer expected");
+                }
             }
+            return Reg{.type = P_NONE, .idx = 0};
         }
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<IfStatementNode>(ast)) {
@@ -300,9 +338,8 @@ void GenCode::walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast) {
 Reg GenCode::walkPragram(const std::shared_ptr<Pragram>& ast) {
     for (const auto &x: ast->getGlobalVariables()) {
         for (const auto &identifier: x->getIdentifiers()) {
-            Symbol sym = symbol_table.getSymbol(identifier); // Get the symbol from the symbol table
-            if (sym.is_array) cgglobsym(sym, std::dynamic_pointer_cast<ArrayInitializer> (x->getInitializer(identifier))); // Declare a global array variable with the given identifier and type
-            else cgglobsym(sym); // Declare a global variable with the given identifier and type
+            if (identifier.is_array) cgglobsym(identifier, std::dynamic_pointer_cast<ArrayInitializer> (x->getInitializer(identifier))); // Declare a global array variable with the given identifier and type
+            else cgglobsym(identifier); // Declare a global variable with the given identifier and type
         }
     }
     // for (const auto &x: ast->getGlobalVariables()) {
@@ -310,23 +347,23 @@ Reg GenCode::walkPragram(const std::shared_ptr<Pragram>& ast) {
     // } 
     for (const auto &x: ast->getFunctions()) {
         std::string func_name = x->getIdentifier() ;
-        cgfuncpreamble(func_name.c_str()); // Generate function preamble code
+        Function func = symbol_table.getFunction(func_name); // Get the function from the symbol table
+        cgfuncpreamble(func); // Generate function preamble code
         if (func_name == "main") {
             // 全局变量初始化
             for (const auto &x: ast->getGlobalVariables()) {
                 for (const auto &identifier: x->getIdentifiers()) {
-                    Symbol sym = symbol_table.getSymbol(identifier); // Get the symbol from the symbol table
                     auto initializer = x->getInitializer(identifier);
-                    if (initializer != nullptr && !sym.is_array) {
+                    if (initializer != nullptr && !identifier.is_array) {
                         Reg reg = walkExpr(initializer);
-                        reg = cgstorglob(reg, identifier.c_str(), x->getVariableType()); // Store the value in the global variable
+                        reg = cgstorsym(reg, identifier, x->getVariableType()); // Store the value in the global variable
                         assemblyCode->freereg(reg);
                     }
                 }
             }
         }
         walkFunction(x); // Walk each function to generate code
-        cgfuncpostamble((func_name + "_end").c_str()); // Generate function postamble code
+        cgfuncpostamble(func, (func_name + "_end").c_str()); // Generate function postamble code
     }
     return Reg{.type = P_NONE, .idx = 0}; // Return a dummy register for now
 }

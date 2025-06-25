@@ -55,12 +55,12 @@ class GenCode {
             assemblyCode->cgpostamble();
         }
 
-        Reg cgloadglob(const char *identifier, PrimitiveType type) {
-            return assemblyCode->cgloadglob(identifier, type);
+        Reg cgloadsym(Symbol identifier, PrimitiveType type) {
+            return assemblyCode->cgloadsym(identifier, type);
         }
 
-        Reg cgstorglob(Reg r, const char *identifier, PrimitiveType type) {
-            return assemblyCode->cgstorglob(r, identifier, type);
+        Reg cgstorsym(Reg r, Symbol identifier, PrimitiveType type) {
+            return assemblyCode->cgstorsym(r, identifier, type);
         }
 
         void cgglobsym(Symbol sym, std::shared_ptr<ArrayInitializer> init = nullptr) {
@@ -135,12 +135,12 @@ class GenCode {
             assemblyCode->cggreaterthanjump(r1, r2, label);
         }
 
-        void cgfuncpreamble(const char *name) {
+        void cgfuncpreamble(Function name) {
             assemblyCode->cgfuncpreamble(name);
         }
 
-        void cgfuncpostamble(const char *label) {
-            assemblyCode->cgfuncpostamble(label);
+        void cgfuncpostamble(Function name, const char *label) {
+            assemblyCode->cgfuncpostamble(name, label);
         }
 
         Reg cgint2char(Reg reg) {
@@ -190,7 +190,7 @@ class GenCode {
         Reg cgcall(const char *name, const Reg reg) {
             return assemblyCode->cgcall(name, reg);
         }
-        Reg cgaddress(const char *identifier) {
+        Reg cgaddress(Symbol identifier) {
             return assemblyCode->cgaddress(identifier);
         }
         Reg cgderef(Reg reg, PrimitiveType type) {
@@ -205,10 +205,10 @@ class GenCode {
         Reg cgstorderef(Reg reg, Reg addr, PrimitiveType type) {
             return assemblyCode->cgstorderef(reg, addr, type);
         }
-        void cginc(const char *identifier, PrimitiveType type) {
+        void cginc(Symbol identifier, PrimitiveType type) {
             assemblyCode->cginc(identifier, type);
         }
-        void cgdec(const char *identifier, PrimitiveType type) {
+        void cgdec(Symbol identifier, PrimitiveType type) {
             assemblyCode->cgdec(identifier, type);
         }
         void cginc(Reg addr, PrimitiveType type) {
@@ -243,4 +243,5 @@ class GenCode {
         Reg walkFunctionCall(const std::shared_ptr<FunctionCallNode>& ast);
         void walkReturn(const std::shared_ptr<ReturnStatementNode>& ast);
         Reg transformType(PrimitiveType type, PrimitiveType target_type, Reg reg);
+        void localArrayInit(const std::shared_ptr<ArrayInitializer>& init);
 };

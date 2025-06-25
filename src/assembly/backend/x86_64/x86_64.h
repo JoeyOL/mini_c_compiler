@@ -120,7 +120,7 @@ public:
         // Load the value into a register and return the register index
         PrimitiveType type = value.type == P_STRING ? P_LONG : value.type; // Use P_CHARPTR for string values
         Reg reg = regManager->allocateRegister(type);
-        if (value.type == P_INT) {
+        if (value.type == P_INT || value.type == P_CHAR) {
             reg.type = P_INT;
             outputFile << "\tmovl\t$" << value.ivalue << ", " << regManager->getRegister(reg) << "\n";
             reg.type = value.type; // Restore the original type
@@ -348,51 +348,52 @@ public:
         regManager->freeAllRegister(); // Free all registers at the end
     }
 
-    Reg cgloadglob(const char *identifier, PrimitiveType type) override {
+    Reg cgloadsym(Symbol identifier, PrimitiveType type) override {
         if (is_pointer(type)) type = P_LONG; // Treat pointers as long for loading
         // Load the value of the global variable into a register
         Reg reg = regManager->allocateRegister(type);
-
+        std::string addr = identifier.getAddress(); // Get the address of the global variable
         if (type == P_INT) {
             outputFile <<
-                "\tmovl\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n";
+                "\tmovl\t" << addr << ", " << regManager->getRegister(reg) << "\n";
             reg.type = P_INT; // Set the type of the register to int
             return reg; // Return the register containing the loaded value
         } else if (type == P_CHAR) {
             reg.type = P_LONG;
             outputFile <<
-                "\tmovzbq\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n";
+                "\tmovzbq\t" << addr << ", " << regManager->getRegister(reg) << "\n";
             reg.type = P_CHAR;
             return reg; // Return the register containing the loaded value
         } else if (type == P_FLOAT) {
             outputFile << 
-                "\tmovsd\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n";
+                "\tmovsd\t" << addr << ", " << regManager->getRegister(reg) << "\n";
             return reg; // Return the register containing the loaded value
         } else if (type == P_LONG) {
             outputFile << 
-                "\tmovq\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n";
+                "\tmovq\t" << addr << ", " << regManager->getRegister(reg) << "\n";
             reg.type = P_LONG;
             return reg;
         } 
     }
 
-    Reg cgstorglob(Reg r, const char *identifier, PrimitiveType type) override {
+    Reg cgstorsym(Reg r, Symbol identifer, PrimitiveType type) override {
         type = is_pointer(type) ? P_LONG : type; // Treat pointers as long for storing
+        std::string addr = identifer.getAddress();
         if (type == P_INT) {
             outputFile <<
-            "\tmovl\t" << regManager->getRegister(r) << ", " << identifier << "(%rip)\n";
+            "\tmovl\t" << regManager->getRegister(r) << ", " << addr << "\n";
             return r;
         } else if (type == P_CHAR) {
             outputFile <<
-            "\tmovb\t" << regManager->getRegister(r) << ", " << identifier << "(%rip)\n";
+            "\tmovb\t" << regManager->getRegister(r) << ", " << addr << "\n";
             return r;
         } else if (type == P_FLOAT) {
             outputFile <<
-            "\tmovsd\t" << regManager->getRegister(r) << ", " << identifier << "(%rip)\n";
+            "\tmovsd\t" << regManager->getRegister(r) << ", " << addr << "\n";
             return r;
         } else if (type == P_LONG) {
             outputFile <<
-            "\tmovq\t" << regManager->getRegister(r) << ", " << identifier << "(%rip)\n";
+            "\tmovq\t" << regManager->getRegister(r) << ", " << addr << "\n";
             return r; // Return the register containing the stored value
         } else {
             throw std::runtime_error("GenCode::cgstorglob: Unsupported type for storing global variable");
@@ -401,8 +402,9 @@ public:
     }
 
     void cglocalsym(Symbol sym) override {
-        outputFile <<
-            "\t.comm\t" << sym.name << "," << sym.size << "," << sym.size << "\n"; // Declare a global symbol
+        // outputFile << 
+        //     "\taddq\t$" << sym.size << ", %rsp\n" // Adjust stack pointer for local variable
+        return;
     }
 
     void cgglobsym(Symbol sym, std::shared_ptr<ArrayInitializer> init = nullptr) override {
@@ -597,18 +599,22 @@ public:
         regManager->freeRegister(r2);
     }
 
-    void cgfuncpreamble(const char *name) override {
+    void cgfuncpreamble(Function func) override {
         outputFile << 
             "\t.text\n"
-            "\t.globl\t" << name << "\n"
-            "\t.type\t" << name << ", @function\n"
-            << name << ":\n"
+            "\t.globl\t" << func.name << "\n"
+            "\t.type\t" << func.name << ", @function\n"
+            << func.name << ":\n"
             "\tpushq\t%rbp\n"
-            "\tmovq\t%rsp, %rbp\n";
+            "\tmovq\t%rsp, %rbp\n"
+            "\tsubq\t$" << func.stack_size << ", %rsp\n"; // Adjust stack pointer for local variables
+        
     }
 
-    void cgfuncpostamble(const char *label) override {
+    void cgfuncpostamble(Function func, const char *label) override {
         cglabel(label);
+        outputFile << 
+            "\taddq\t$" << func.stack_size << ", %rsp\n"; // Restore stack pointer
         outputFile << 
             "\tpopq\t%rbp\n"
             "\tret\n";
@@ -737,9 +743,9 @@ public:
         cgjump(end_label);
     }
 
-    Reg cgaddress(const char *identifier) override {
+    Reg cgaddress(Symbol identifier) override {
         Reg reg = regManager->allocateRegister(P_LONG); // Allocate a register for the address
-        outputFile << "\tleaq\t" << identifier << "(%rip), " << regManager->getRegister(reg) << "\n"; // Load the address into the register
+        outputFile << "\tleaq\t" << identifier.getAddress() << ", " << regManager->getRegister(reg) << "\n"; // Load the address into the register
         return reg; // Return the register containing the address
     }
 
@@ -824,51 +830,51 @@ public:
         }
     }
 
-    void cginc(const char* identifier, PrimitiveType type) override {
+    void cginc(Symbol identifier, PrimitiveType type) override {
         // Increment the value of the global variable by 1
         if (type == P_INT) {
-            outputFile << "\tincb\t" << identifier << "(%rip)\n"; // Increment int value
+            outputFile << "\tincb\t" << identifier.getAddress() << "\n"; // Increment int value
         } else if (type == P_CHAR) {
-            outputFile << "\tincl\t" << identifier << "(%rip)\n"; // Increment char value
+            outputFile << "\tincl\t" << identifier.getAddress() << "\n"; // Increment char value
         } else if (type == P_LONG || type == P_CHARPTR) {
-            outputFile << "\tincq\t" << identifier << "(%rip)\n"; // Increment long value
+            outputFile << "\tincq\t" << identifier.getAddress() << "\n"; // Increment long value
         } else if (type == P_FLOAT) {
             Reg r1 = cgload(Value{ .type = P_FLOAT, .fvalue = 1.0f }); // Load float constant 1.0
             Reg r2 = regManager->allocateRegister(P_FLOAT); // Allocate a register for the float value
-            outputFile << "\tmovsd\t" << identifier << "(%rip), " << regManager->getRegister(r2) << "\n"; // Load the float value from the global variable
+            outputFile << "\tmovsd\t" << identifier.getAddress() << ", " << regManager->getRegister(r2) << "\n"; // Load the float value from the global variable
             outputFile << "\taddsd\t" << regManager->getRegister(r1) << ", " << regManager->getRegister(r2) << "\n"; // Add float value
-            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", " << identifier << "(%rip)\n"; // Store the incremented value back to the global variable
+            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", " << identifier.getAddress() << "\n"; // Store the incremented value back to the global variable
             regManager->freeRegister(r1); // Free the register used for the float constant
             regManager->freeRegister(r2); // Free the register used for the float value
         } else if (type == P_INTPTR) {
-            outputFile << "\taddq\t$4, " << identifier << "(%rip)\n"; // Increment pointer by 4 bytes
+            outputFile << "\taddq\t$4, " << identifier.getAddress() << "\n"; // Increment pointer by 4 bytes
         } else if (type == P_FLOATPTR || type == P_LONGPTR) {
-            outputFile << "\taddq\t$8, " << identifier << "(%rip)\n";
+            outputFile << "\taddq\t$8, " << identifier.getAddress() << "\n";
         } else {
             throw std::runtime_error("GenCode::cginc: Unsupported type for incrementing global variable");
         }
     }
 
-    void cgdec(const char* identifier, PrimitiveType type) override {
+    void cgdec(Symbol identifier, PrimitiveType type) override {
         // Decrement the value of the global variable by 1
         if (type == P_INT) {
-            outputFile << "\tdecb\t" << identifier << "(%rip)\n"; // Decrement int value
+            outputFile << "\tdecb\t" << identifier.getAddress() << "\n"; // Decrement int value
         } else if (type == P_CHAR) {
-            outputFile << "\tdecl\t" << identifier << "(%rip)\n"; // Decrement char value
+            outputFile << "\tdecl\t" << identifier.getAddress() << "\n"; // Decrement char value
         } else if (type == P_LONG || type == P_CHARPTR) {
-            outputFile << "\tdecq\t" << identifier << "(%rip)\n"; // Decrement long value
+            outputFile << "\tdecq\t" << identifier.getAddress() << "\n"; // Decrement long value
         } else if (type == P_FLOAT) {
             Reg r1 = cgload(Value{ .type = P_FLOAT, .fvalue = 1.0f }); // Load float constant 1.0
             Reg r2 = regManager->allocateRegister(P_FLOAT); // Allocate a register for the float value
-            outputFile << "\tmovsd\t" << identifier << "(%rip), " << regManager->getRegister(r2) << "\n"; // Load the float value from the global variable
+            outputFile << "\tmovsd\t" << identifier.getAddress() << ", " << regManager->getRegister(r2) << "\n"; // Load the float value from the global variable
             outputFile << "\tsubsd\t" << regManager->getRegister(r1) << ", " << regManager->getRegister(r2) << "\n"; // Subtract float value
-            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", " << identifier << "(%rip)\n"; // Store the decremented value back to the global variable
+            outputFile << "\tmovsd\t" << regManager->getRegister(r2) << ", " << identifier.getAddress() << "\n"; // Store the decremented value back to the global variable
             regManager->freeRegister(r1); // Free the register used for the float constant
             regManager->freeRegister(r2); // Free the register used for the float value
         } else if (type == P_INTPTR) {
-            outputFile << "\tsubq\t$4, " << identifier << "(%rip)\n"; // Decrement pointer by 4 bytes
+            outputFile << "\tsubq\t$4, " << identifier.getAddress() << "\n"; // Decrement pointer by 4 bytes
         } else if (type == P_FLOATPTR || type == P_LONGPTR) {
-            outputFile << "\tsubq\t$8, " << identifier << "(%rip)\n";
+            outputFile << "\tsubq\t$8, " << identifier.getAddress() << "\n";
         } else {
             throw std::runtime_error("GenCode::cgdec: Unsupported type for decrementing global variable");
         }

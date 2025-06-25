@@ -219,7 +219,7 @@ class LValueNode : public ExprNode {
         void walk(std::string prefix) override {
             // Implement the walk method to print the identifier
             std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier.name << ", Type: " << convertTypeToString() << std::endl;
-            if (is_array) {
+            if (is_array && index) {
                 index->walk(prefix + "\t");
             }
         }
@@ -352,12 +352,37 @@ class ArrayInitializer : public ExprNode {
             return max_size - current_size; // Return the number of elements that can still be added
         }
 
+        void setBaseOffset(int offset) {
+            base_offset = offset; // Set the base offset for the array initializer
+        }
+
+        void getValuePos() {
+            int elem_size = symbol_table.typeToSize(type);
+            int j = 0;
+            for (int i = 0; i < values.size(); ++i) {
+                if (auto x = std::dynamic_pointer_cast<ValueNode>(values[i])) {
+                    pos_on_stack.push_back(base_offset + j * elem_size); // Calculate the position of the value on the stack
+                    j++;
+                } else if (auto x = std::dynamic_pointer_cast<ArrayInitializer>(values[i])) {
+                    x->setBaseOffset(base_offset + j * elem_size); // Set the base offset for nested initializers
+                    // x->getValuePos(); // Recursively get the positions for nested initializers
+                    j += next_size;
+                }
+            }
+        }
+
+        std::vector<int> getPosOnStack() const {
+            return pos_on_stack; // Return the positions of the values on the stack
+        }
+
     private:
         int min_size;
         int current_size; // 现在初始化的元素个数
         int next_size; //遇到一个{}，之后current_size需要增加的size
         int max_size;
+        int base_offset;
         // 只允许常量声明
         std::vector<std::shared_ptr<ExprNode>> values; // Values to initialize the array with
+        std::vector<int> pos_on_stack; // Positions of the values on the stack
 
 };

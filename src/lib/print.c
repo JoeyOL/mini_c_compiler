@@ -22,8 +22,19 @@ void printchar(char x) {
 // }
 
 // int main() {
-//     float c = scanf("%f", &c);
-
-//     int a = c < 4.5;
-//     return 0;
+//   int d[5];
+//   int a = 10;
+//   int b = 20;
+//   int *c = d; 
+//   *c = 10;
+//   printint(d[0]);
+//   printint(a + b);
+//   for (int i = 0; i < 5; i++) {
+//       d[i] = i + 1;
+//       if (i) {
+//           int j = d[i];
+//           printint(j); 
+//       }
+//   }
+//   return 0;
 // }
