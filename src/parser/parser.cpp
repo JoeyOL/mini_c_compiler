@@ -124,14 +124,14 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
             std::to_string(tok.line_no) + ", column " + 
             std::to_string(tok.column_no));
     }
-    Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
+    std::shared_ptr<Symbol> sym = symbol_table.getSymbol(tok.value.strvalue);
     int depth = 0, offset = -1;
     std::vector<std::shared_ptr<ExprNode>> indices;
     while (peek().type == T_LBRACKET) {
         consume(); // Consume the '[' token
         std::shared_ptr<ExprNode> index = parseExpressionWithPrecedence(0);
-        offset = sym.getArrayBaseOffset(depth);
-        offset /= symbol_table.typeToSize(valueAt(sym.type)); // Calculate the base offset for the array element
+        offset = sym->getArrayBaseOffset(depth);
+        offset /= symbol_table.typeToSize(valueAt(sym->type)); // Calculate the base offset for the array element
         if (offset != 1) {
             index = std::make_shared<BinaryExpNode>(A_MULTIPLY, index, std::make_shared<ValueNode>(Value{P_INT, .ivalue = offset}));
             indices.push_back(index); // If offset is not 1, scale the index by the base offset
@@ -150,19 +150,19 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
     }
     if (left != nullptr) {
         left = std::make_shared<UnaryExpNode>(U_SCALE, left, P_LONG); // Scale the index by the size of the array element
-        left->setOffset(symbol_table.typeToSize(valueAt(sym.type))); // Set the offset for the array element
+        left->setOffset(symbol_table.typeToSize(valueAt(sym->type))); // Set the offset for the array element
     }
     std::shared_ptr<LValueNode> lvaule = std::make_shared<LValueNode>(sym, left);
-    if (depth == sym.array_dimensions.size()) {
-        std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_DEREF, lvaule, valueAt(sym.type));
+    if (depth == sym->array_dimensions.size()) {
+        std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_DEREF, lvaule, valueAt(sym->type));
         return ret;
     } else {
-        if (depth != sym.array_dimensions.size() - 1) {
+        if (depth != sym->array_dimensions.size() - 1) {
             throw std::runtime_error("Parser::parseArrayAccess: Array access depth mismatch at line " + 
                 std::to_string(tok.line_no) + ", column " + 
                 std::to_string(tok.column_no));
         }
-        PrimitiveType point_type = pointTo(sym.type);
+        PrimitiveType point_type = pointTo(sym->type);
         // 只允许 *(p+1) = expr 这种形式，如a[5][5], *(a[5] + 1) = expr
         std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_ADDR, lvaule, point_type);
         return ret;
@@ -189,8 +189,8 @@ std::shared_ptr<ExprNode> Parser::parimary() {
             putback(); // Put back the identifier token
             ret = parseFunctionCall();
         } else {
-            Symbol sym = symbol_table.getSymbol(tok.value.strvalue);
-            if (peek().type == T_LBRACKET || sym.is_array) {
+            std::shared_ptr<Symbol> sym = symbol_table.getSymbol(tok.value.strvalue);
+            if (peek().type == T_LBRACKET || sym->is_array) {
                 putback();
                 ret = parseArrayAccess();
             }
@@ -368,14 +368,14 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
     return stmts;
 }
 
-std::shared_ptr<ArrayInitializer> Parser::parseArrayInitializer(std::vector<int> &dimensions, int depth) {
+std::shared_ptr<ArrayInitializer> Parser::parseArrayInitializer(std::shared_ptr<Symbol>sym, std::vector<int> &dimensions, int depth) {
     if (depth >= dimensions.size()) {
         throw std::runtime_error("Parser::parseArrayInitializer: Depth exceeds dimensions size at line " + 
             std::to_string(peek().line_no) + ", column " + 
             std::to_string(peek().column_no));
     }
     assert(consume().type == T_LBRACE);
-    std::shared_ptr<ArrayInitializer> array_init = std::make_shared<ArrayInitializer>(dimensions, depth);
+    std::shared_ptr<ArrayInitializer> array_init = std::make_shared<ArrayInitializer>(sym, dimensions, depth);
     while(peek().type != T_RBRACE) {
         if (peek().type == T_NUMBER) {
             auto value = std::make_shared<ValueNode>(consume().value);
@@ -387,7 +387,7 @@ std::shared_ptr<ArrayInitializer> Parser::parseArrayInitializer(std::vector<int>
                     std::to_string(peek().column_no));
             }
             // 递归解析嵌套的数组初始化
-            std::shared_ptr<ArrayInitializer> nested_init = parseArrayInitializer(dimensions, depth + 1);
+            std::shared_ptr<ArrayInitializer> nested_init = parseArrayInitializer(sym, dimensions, depth + 1);
             array_init->addInitializer(nested_init);
         } else {
             throw std::runtime_error("Parser::parseArrayInitializer: Expected number or '{' at line " + 
@@ -440,7 +440,7 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
         if (!var_decl->isArray()) symbol_table.addSymbol(var_name, var_decl->getVariableType()); // Assuming all variables are of type int for simplicity
         else symbol_table.addSymbol(var_name, var_decl->getVariableType(), var_decl->getDimensions()); // Add the variable to the symbol table with its dimensions
 
-        Symbol sym = symbol_table.getSymbol(var_name); // Get the symbol from the symbol table
+        std::shared_ptr<Symbol> sym = symbol_table.getSymbol(var_name); // Get the symbol from the symbol table
 
         if (peek().type == T_ASSIGN) {
             consume();
@@ -448,10 +448,9 @@ std::shared_ptr<VariableDeclareNode> Parser::parseVariableDeclare() {
             if (!var_decl->isArray()) initializer = parseExpressionWithPrecedence(0);
             else {
                 auto dims = var_decl->getDimensions();
-                initializer = parseArrayInitializer(dims, 0);
+                initializer = parseArrayInitializer(sym, dims, 0);
                 initializer->setPrimitiveType(valueAt(var_decl->getVariableType())); // Set the primitive type of the initializer
                 auto y = std::dynamic_pointer_cast<ArrayInitializer>(initializer);
-                y->setBaseOffset(sym.pos_in_stack);
             }
             var_decl->addIdentifier(sym, std::move(initializer));
         } else {
@@ -473,7 +472,7 @@ std::shared_ptr<AssignmentNode> Parser::parseAssignment() {
             std::to_string(peek().line_no) + ", column " + 
             std::to_string(peek().column_no));
     }
-    Symbol sym = symbol_table.getSymbol(identifier); // Check if the identifier exists in the symbol table
+    std::shared_ptr<Symbol> sym = symbol_table.getSymbol(identifier); // Check if the identifier exists in the symbol table
     assert(consume().type == T_ASSIGN); // Skip the '=' token
     std::shared_ptr<ExprNode> expr = parseExpressionWithPrecedence(0);
     return std::shared_ptr<AssignmentNode>(new AssignmentNode(std::make_shared<LValueNode>(sym), std::move(expr)));

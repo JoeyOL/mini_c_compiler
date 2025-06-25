@@ -109,11 +109,11 @@ class VariableDeclareNode : public StatementNode {
         void walk(std::string prefix) override {
             std::cout << prettyPrint(prefix) << "Declare Statement, Type " << convertTypeToString(var_type) << ", Name: ";
             for (auto &identifier : identifiers) {
-                std::cout << identifier.name << ", ";
+                std::cout << identifier->name << ", ";
             }
             std::cout << std::endl;
-            for (int i = 0; i < identifiers.size(); ++i) {
-                Symbol identifier = identifiers[i];
+            for (size_t i = 0; i < identifiers.size(); ++i) {
+                Symbol identifier = *identifiers[i];
                 std::shared_ptr<ExprNode> initializer = initializers[i];
 
                 std::cout << prettyPrint(prefix + "\t") << "Initializer for " << identifier.name << ": " << std::endl;
@@ -125,19 +125,19 @@ class VariableDeclareNode : public StatementNode {
             }
         }
 
-        void addIdentifier(Symbol identifier) {
+        void addIdentifier(std::shared_ptr<Symbol> identifier) {
             identifiers.push_back(identifier); // Add a new identifier
             initializers.push_back(nullptr); // Initialize the initializer for the identifier to nullptr
         }
 
-        void addIdentifier(Symbol identifier, std::shared_ptr<ExprNode> initializer) {
+        void addIdentifier(std::shared_ptr<Symbol> identifier, std::shared_ptr<ExprNode> initializer) {
             identifiers.push_back(identifier); // Add a new identifier
             initializers.push_back(initializer); // Add the initializer for the identifier
         }
 
         void setInitializer(Symbol identifier, std::shared_ptr<ExprNode> initializer) {
-            for (int i = 0; i < identifiers.size(); ++i) {
-                if (identifiers[i] == identifier) {
+            for (size_t i = 0; i < identifiers.size(); ++i) {
+                if ((*identifiers[i]) == identifier) {
                     if (i < initializers.size()) {
                         initializers[i] = initializer; // Update the initializer for the identifier
                         return;
@@ -147,11 +147,15 @@ class VariableDeclareNode : public StatementNode {
         }
 
         std::vector<Symbol> getIdentifiers() const {
-            return identifiers; // Return the list of identifiers
+            std::vector<Symbol> ret; // Create a vector to hold the identifiers
+            for (const auto& id : this->identifiers) {
+                ret.push_back(*id); // Add each identifier to the vector
+            }
+            return ret; // Return the list of identifiers
         }
         std::shared_ptr<ExprNode> getInitializer(Symbol identifier) const {
-            for (int i = 0; i < identifiers.size(); ++i) {
-                if (identifiers[i] == identifier) {
+            for (size_t i = 0; i < identifiers.size(); ++i) {
+                if ((*identifiers[i]) == identifier) {
                     if (i < initializers.size()) {
                         return initializers[i]; // Return the initializer for the identifier
                     }
@@ -195,7 +199,7 @@ class VariableDeclareNode : public StatementNode {
         bool is_array = false;
         PrimitiveType var_type;
         int star_count; // 指针类型
-        std::vector<Symbol> identifiers;
+        std::vector<std::shared_ptr<Symbol>> identifiers;
         std::vector<std::shared_ptr<ExprNode>> initializers;
 };
 

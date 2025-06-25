@@ -108,6 +108,12 @@ struct Symbol {
     bool is_global;
     int pos_in_stack; // Position in stack for local variables, if applicable
     std::vector<int> array_dimensions; // Dimensions for array types, if applicable
+
+    Symbol(std::string name, PrimitiveType type, int size, bool is_array, bool is_global, int pos_in_stack, std::vector<int> array_dimensions)
+        : name(std::move(name)), type(type), size(size), is_array(is_array), is_global(is_global), pos_in_stack(pos_in_stack), array_dimensions(std::move(array_dimensions)) {}
+
+    Symbol(std::string name, PrimitiveType type, int size, bool is_array, bool is_global, int pos_in_stack)
+        : name(std::move(name)), type(type), size(size), is_array(is_array), is_global(is_global), pos_in_stack(pos_in_stack) {}
     bool operator==(const Symbol &other_name) const {
         return name == other_name.name;
     }
@@ -140,7 +146,8 @@ struct Function {
 
 struct SymbolTable {
     
-    std::vector<std::vector<Symbol>> symbols;
+    std::vector<std::vector<std::shared_ptr<Symbol>>> symbols;
+    std::vector<std::shared_ptr<Symbol>> current_scope_symbols; // Symbols in the current scope
     std::vector<Function> functions;
     Function current_function; // Current function being processed
     int offset_on_stack; // Offset for local variables in the stack
@@ -174,19 +181,21 @@ struct SymbolTable {
     void addSymbol(std::string name, PrimitiveType type) {
         auto &scope = symbols.back(); // Get the current scope's symbols
         for (const auto& symbol : scope) {
-            if (symbol.name == name) {
+            if (symbol->name == name) {
                 throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
             }
         }
         int size = typeToSize(type);
         offset_on_stack -= size < 4 ? 4 : size;// Decrease the stack offset for the new symbol
-        scope.push_back({name, type, typeToSize(type), false, current_scope == 0, offset_on_stack, {}}); // Add a new symbol with no dimensions
+        auto sym = std::make_shared<Symbol>(name, type, typeToSize(type), false, current_scope == 0, offset_on_stack);
+        scope.push_back(sym); // Add a new symbol with no dimensions
+        current_scope_symbols.push_back(sym); // Add to the current scope's symbols
     }
 
     void addSymbol(std::string name, PrimitiveType type, std::vector<int> dimensions) {
         auto &scope = symbols.back(); // Get the current scope's symbols
         for (const auto& symbol : scope) {
-            if (symbol.name == name) {
+            if (symbol->name == name) {
                 throw std::runtime_error("SymbolTable::addSymbol: Symbol already exists: " + name);
             }
         }
@@ -195,14 +204,16 @@ struct SymbolTable {
             size *= dim; // Calculate the total size based on dimensions
         }
         offset_on_stack -= size < 4 ? 4 : size; // Decrease the stack offset for the new symbol
-        scope.push_back({name, type, size, true, current_scope == 0, offset_on_stack, dimensions});
+        auto sym = std::make_shared<Symbol>(name, type, size, true, current_scope == 0, offset_on_stack, dimensions);
+        scope.push_back(sym);
+        current_scope_symbols.push_back(sym); // Add to the current scope's symbols
     }
 
-    Symbol getSymbol(std::string name) {
+    std::shared_ptr<Symbol> getSymbol(std::string name) {
         for (auto it = symbols.rbegin(); it != symbols.rend(); ++it) {
             const auto& scope = *it; // Iterate through scopes from the most recent to the oldest
             for (const auto& symbol : scope) {
-                if (symbol.name == name) {
+                if (symbol->name == name) {
                     return symbol; // Return the found symbol
                 }
             }
@@ -223,6 +234,7 @@ struct SymbolTable {
         symbols.push_back({}); // Create a new scope for the function
         current_scope++; // Increment the current scope level
         offset_on_stack = -8; // Reset the stack offset for the new function scope
+        current_scope_symbols.clear(); // Clear the symbols for the current function scope
     }
 
     void exitScope() {
@@ -239,6 +251,13 @@ struct SymbolTable {
         }
         symbols.pop_back(); // Remove the current function scope
         current_scope--; // Decrement the current scope level
+
+        int current_btm = offset_on_stack;
+        for (auto &symbol : current_scope_symbols) {
+            symbol->pos_in_stack = current_btm; 
+            current_btm += symbol->size; // Update the position in stack for each symbol
+        }
+
         functions.back().stack_size = -offset_on_stack; // Set the stack size for the function
         functions.back().stack_size += functions.back().stack_size % 16 ? 16 - functions.back().stack_size % 16 : 0;
     }

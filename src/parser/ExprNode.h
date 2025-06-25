@@ -189,9 +189,9 @@ class UnaryExpNode : public ExprNode {
 
 class LValueNode : public ExprNode {
     public:
-        LValueNode(Symbol identifier, std::shared_ptr<ExprNode> index = nullptr): identifier(std::move(identifier)) {
-            type = identifier.type;
-            if (identifier.is_array) {
+        LValueNode(std::shared_ptr<Symbol> identifier, std::shared_ptr<ExprNode> index = nullptr): identifier(identifier) {
+            type = identifier->type;
+            if (identifier->is_array) {
                 is_array = true; // Set the flag if the identifier is an array
             }
             this->index = std::move(index); // Set the index if provided
@@ -215,10 +215,13 @@ class LValueNode : public ExprNode {
                 default: return "unknown";
             }
         }
-        Symbol getIdentifier() const { return identifier; }
+        Symbol getIdentifier() const { 
+            Symbol sym = *identifier; // Return a copy of the identifier symbol
+            return sym; 
+        }
         void walk(std::string prefix) override {
             // Implement the walk method to print the identifier
-            std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier.name << ", Type: " << convertTypeToString() << std::endl;
+            std::cout << prettyPrint(prefix) << "LValue Identifier: " << identifier->name << ", Type: " << convertTypeToString() << std::endl;
             if (is_array && index) {
                 index->walk(prefix + "\t");
             }
@@ -233,7 +236,7 @@ class LValueNode : public ExprNode {
             this->index = std::move(index); // Set the index expression for the identifier
         }
     private:
-        Symbol identifier;
+        std::shared_ptr<Symbol> identifier;
         bool is_array = false; // Flag to indicate if the identifier is an array
         std::shared_ptr<ExprNode> index;
 };
@@ -301,11 +304,11 @@ class AssignmentNode : public ExprNode {
 
 class ArrayInitializer : public ExprNode {
     public:
-        ArrayInitializer(std::vector<int> &dims, int depth) {
-            if (depth != dims.size() - 1) {
+        ArrayInitializer(std::shared_ptr<Symbol> sym, std::vector<int> &dims, int depth) {
+            if ((size_t)depth != dims.size() - 1) {
                 min_size = dims.back();
                 max_size = 1;
-                for (int i = depth; i < dims.size(); ++i) {
+                for (size_t i = depth; i < dims.size(); ++i) {
                     max_size *= dims[i]; // Calculate the maximum size of the array
                 }
                 next_size = max_size / dims[depth];
@@ -315,6 +318,7 @@ class ArrayInitializer : public ExprNode {
                 next_size = -1;
             }
             current_size = 0;
+            symbol = std::move(sym); // Store the symbol for the array being initialized
         }
 
         void addInitializer(std::shared_ptr<ExprNode> value) {
@@ -352,6 +356,10 @@ class ArrayInitializer : public ExprNode {
             return max_size - current_size; // Return the number of elements that can still be added
         }
 
+        void setBaseOffset() {
+            base_offset = symbol->pos_in_stack; // Set the base offset for the array initializer
+        }
+
         void setBaseOffset(int offset) {
             base_offset = offset; // Set the base offset for the array initializer
         }
@@ -359,7 +367,7 @@ class ArrayInitializer : public ExprNode {
         void getValuePos() {
             int elem_size = symbol_table.typeToSize(type);
             int j = 0;
-            for (int i = 0; i < values.size(); ++i) {
+            for (size_t i = 0; i < values.size(); ++i) {
                 if (auto x = std::dynamic_pointer_cast<ValueNode>(values[i])) {
                     pos_on_stack.push_back(base_offset + j * elem_size); // Calculate the position of the value on the stack
                     j++;
@@ -381,6 +389,7 @@ class ArrayInitializer : public ExprNode {
         int next_size; //遇到一个{}，之后current_size需要增加的size
         int max_size;
         int base_offset;
+        std::shared_ptr<Symbol> symbol; // Symbol for the array being initialized
         // 只允许常量声明
         std::vector<std::shared_ptr<ExprNode>> values; // Values to initialize the array with
         std::vector<int> pos_on_stack; // Positions of the values on the stack

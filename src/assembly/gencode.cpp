@@ -267,6 +267,7 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
                 assemblyCode->freereg(reg);
             } else {
                 if (auto y = std::dynamic_pointer_cast<ArrayInitializer>(initializer)) {
+                    y->setBaseOffset();
                     localArrayInit(y); // Initialize the local array variable
                 } else {
                     throw std::runtime_error("GenCode::walkStatement: Array initializer expected");
