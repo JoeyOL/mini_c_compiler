@@ -26,26 +26,6 @@ int main(int argc, char *argv[]) {
         Token token;
         std::vector<Token> tokens;
         while (scanner.scan(token)) {
-            switch (token.type) {
-            case T_NUMBER:
-                if (token.value.type == P_FLOAT) 
-                    std::cout << "Float Literal: " << token.value.fvalue << std::endl;
-                else 
-                    std::cout << "Integer Literal: " << token.value.ivalue << std::endl;
-                break;
-            case T_PLUS:
-                std::cout << "Plus Operator" << std::endl;
-                break;
-            case T_MINUS:
-                std::cout << "Minus Operator" << std::endl;
-                break;
-            case T_STAR:
-                std::cout << "Star Operator" << std::endl;
-                break;
-            case T_SLASH:
-                std::cout << "Slash Operator" << std::endl;
-                break;
-            }
             tokens.push_back(token);
         }
         std::cout << "End of file reached." << std::endl;

@@ -11,6 +11,7 @@ public:
     void checkExpression(std::shared_ptr<ExprNode> node);
     void checkVariableDeclare(std::shared_ptr<VariableDeclareNode> node);
     void checkFunctionDeclare(std::shared_ptr<FunctionDeclareNode> node);
+    void checkFunctionCall(std::shared_ptr<FunctionCallNode> node);
     void checkPrint(std::shared_ptr<PrintStatementNode> node);
     void checkIfStatement(std::shared_ptr<IfStatementNode> node);
     void checkWhileStatement(std::shared_ptr<WhileStatementNode> node);

@@ -131,7 +131,7 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
         consume(); // Consume the '[' token
         std::shared_ptr<ExprNode> index = parseExpressionWithPrecedence(0);
         offset = sym->getArrayBaseOffset(depth);
-        offset /= symbol_table.typeToSize(valueAt(sym->type)); // Calculate the base offset for the array element
+        // offset /= symbol_table.typeToSize(valueAt(sym->type)); // Calculate the base offset for the array element
         if (offset != 1) {
             index = std::make_shared<BinaryExpNode>(A_MULTIPLY, index, std::make_shared<ValueNode>(Value{P_INT, .ivalue = offset}));
             indices.push_back(index); // If offset is not 1, scale the index by the base offset
@@ -153,6 +153,7 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
         left->setOffset(symbol_table.typeToSize(valueAt(sym->type))); // Set the offset for the array element
     }
     std::shared_ptr<LValueNode> lvaule = std::make_shared<LValueNode>(sym, left);
+    lvaule->setIndexLen(depth); // Set the index length for the lvalue
     if (depth == sym->array_dimensions.size()) {
         std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_DEREF, lvaule, valueAt(sym->type));
         return ret;
@@ -536,10 +537,85 @@ std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
     return std::make_shared<ForStatementNode>(std::move(preop_stmt), std::move(condition), std::move(body), std::move(postop_stmt));
 }
 
+PrimitiveType tokenTypeToPrimitiveType(TokenType type) {
+    switch (type) {
+        case T_INT: return P_INT;
+        case T_FLOAT: return P_FLOAT;
+        case T_CHAR: return P_CHAR;
+        case T_LONG: return P_LONG;
+        case T_VOID: return P_VOID; // 虽然void类型没有实际意义，但为了兼容性保留
+        default:
+            throw std::runtime_error("Parser::tokenTypeToPrimitiveType: Unexpected token type " + 
+                std::to_string(type));
+    }
+}
+
+
+std::shared_ptr<FunctionParamNode> Parser::parseFunctionParam() {
+    auto ret = std::make_shared<FunctionParamNode>();
+    if (peek().type == T_RPAREN) {
+        return ret; // Return an empty function parameter node
+    }
+    do {
+        assert(peek().type == T_INT || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG);
+        std::shared_ptr<Symbol> sym = std::make_shared<Symbol>();
+
+        // 检查是不是指针类型
+        // 这里实际上支持了 int ******a这种操作，但是会导致pointTo操作失败，后续实现
+        PrimitiveType type = tokenTypeToPrimitiveType(consume().type);
+        while (peek().type == T_STAR) {
+            consume();
+            type = pointTo(type); // Update the type to pointer type
+        }
+        sym->type = type; // Set the variable type to pointer type
+
+
+        if (current >= toks.size() || peek().type != T_IDENTIFIER) {
+            throw std::runtime_error("Parser::parseVariableDeclare: Expected identifier at line " + 
+                std::to_string(peek().line_no) + ", column " + 
+                std::to_string(peek().column_no));
+        }
+        sym->name = consume().value.strvalue;
+
+
+        // 解析数组，第一维长度可以缺省
+        bool first_dimension = true;
+        std::vector<int> dimensions;
+        if (peek().type == T_LBRACKET) {
+            while (peek().type == T_LBRACKET) {
+                consume(); // Consume the '[' token
+                if (peek().type != T_NUMBER) {
+                    if (first_dimension) {
+                        first_dimension = false; // 第一维可以缺省
+                        int array_size = -1;
+                        dimensions.push_back(array_size); // Add a placeholder for the first dimension
+                    } else {
+                        throw std::runtime_error("Parser::parseVariableDeclare: Expected number after '[' at line " + 
+                            std::to_string(peek().line_no) + ", column " + 
+                            std::to_string(peek().column_no));
+                    }
+                } else {
+                    first_dimension = false; // 第一维可以缺省
+                    int array_size = consume().value.ivalue;
+                    dimensions.push_back(array_size); // Add the array dimension to the variable declaration
+                }
+                assert(consume().type == T_RBRACKET); // Expect a closing bracket
+            }
+            sym->is_array = true; // Set the variable as an array
+            sym->array_dimensions = dimensions; // Set the array dimensions
+            sym->type = arrayTo(sym->type);
+        }
+        // 添加到符号表
+        ret->addParam(sym); // Add the parameter to the function parameter node
+
+    } while (current < toks.size() && consume().type == T_COMMA);
+    putback(); // Put back the last token, which should be a semicolon or end of statement
+    return ret;
+}
+
 
 // TODO: 目前只支持void类型的无参数函数
 std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
-    symbol_table.enterFunction();
     assert(peek().type == T_VOID || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG || peek().type == T_INT);
     TokenType return_type = consume().type; // Get the return type of the function
     if (current >= toks.size() || peek().type != T_IDENTIFIER) {
@@ -549,10 +625,14 @@ std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
     }
     std::string func_name = consume().value.strvalue;
     assert(consume().type == T_LPAREN);
+    std::shared_ptr<FunctionParamNode> param = parseFunctionParam(); // Parse the function parameters, if any
     assert(consume().type == T_RPAREN);
+    // 处理符号表
+    symbol_table.addFunction(func_name, tokenTypeToPrimitiveType(return_type), param->getParams()); // Add the function to the symbol table
+    symbol_table.enterFunction(param->getParams()); // Enter the function scope with the parameters
+
     std::shared_ptr<BlockNode> body = parseBlock();
-    auto ret = std::make_shared<FunctionDeclareNode>(func_name, return_type, std::move(body));
-    symbol_table.addFunction(func_name, ret->getReturnType()); // Add the function to the symbol table
+    auto ret = std::make_shared<FunctionDeclareNode>(func_name, tokenTypeToPrimitiveType(return_type), std::move(body), std::move(param));
     symbol_table.exitFuction(); // Exit the function scope after parsing the function declaration
     return ret;
 }

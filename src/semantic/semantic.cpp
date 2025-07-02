@@ -324,6 +324,60 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
     }
 }
 
+
+void Semantic::checkFunctionCall(std::shared_ptr<FunctionCallNode> node) {
+    Function func = symbol_table.getFunction(node->getIdentifier());
+    std::vector<std::shared_ptr<ExprNode>> args = node->getArguments();
+    if (func.params.size() != args.size()) {
+        throw std::runtime_error("Semantic::checkFunctionCall: Function call argument count mismatch for " + node->getIdentifier());
+    }
+    for (size_t i = 0; i < args.size(); ++i) {
+        checkExpression(args[i]);
+        if (!func.params[i]->is_array) {
+            if (!assignCompatible(func.params[i]->type, args[i]->getPrimitiveType(), args[i]->isNeedTransform())) {
+                throw std::runtime_error("Semantic::checkFunctionCall: Type mismatch in function call argument " + std::to_string(i) + " for " + node->getIdentifier());
+            }
+            if (args[i]->isNeedTransform()) {
+                args[i] = std::make_shared<UnaryExpNode>(U_TRANSFORM, args[i], func.params[i]->type);
+            }
+        } else {
+            auto x = std::dynamic_pointer_cast<UnaryExpNode> (args[i]);
+            assert(x != nullptr && x->getOp() == U_ADDR);
+            auto lvalue = std::dynamic_pointer_cast<LValueNode>(x->getExpr());
+            assert(lvalue != nullptr && is_array(lvalue->getPrimitiveType()));
+            // 匹配维度
+        
+            if (lvalue->getPrimitiveType() != func.params[i]->type) {
+                throw std::runtime_error("Semantic::checkFunctionCall: Type mismatch in function call argument " + std::to_string(i) + " for " + node->getIdentifier());
+            }
+
+            if (lvalue->getIndex() != nullptr) {
+                checkExpression(lvalue->getIndex());
+                if (!typeCompatible(lvalue->getIndex()->getPrimitiveType(), P_INT, lvalue->getIndex()->isNeedTransform())) {
+                    throw std::runtime_error("Semantic::checkFunctionCall: Index type must be int for array access in function call");
+                }
+                if (lvalue->getIndex()->isNeedTransform()) {
+                    lvalue->setIndex(std::make_shared<UnaryExpNode>(U_TRANSFORM, lvalue->getIndex(), P_INT));
+                }
+            }
+
+            int index_len = lvalue->getIndexLen();
+            auto lvalue_sym = lvalue->getIdentifier();
+            if (lvalue_sym.array_dimensions.size() - index_len != func.params[i]->array_dimensions.size()) {
+                throw std::runtime_error("Semantic::checkFunctionCall: Array dimensions mismatch in function call argument " + std::to_string(i) + " for " + node->getIdentifier());
+            }
+
+            for (size_t j = 0; j < func.params[i]->array_dimensions.size(); ++j) {
+                if (lvalue_sym.array_dimensions[j + index_len] != func.params[i]->array_dimensions[j] && func.params[i]->array_dimensions[j] != -1) {
+                    throw std::runtime_error("Semantic::checkFunctionCall: Array dimensions mismatch in function call argument " + std::to_string(i) + " for " + node->getIdentifier());
+                }
+            }
+
+        }
+
+    }
+}
+
 void Semantic::checkFunctionDeclare(std::shared_ptr<FunctionDeclareNode> node) { 
     symbol_table.setCurrentFunction(symbol_table.getFunction(node->getIdentifier()));
     checkBlock(node->getBody());

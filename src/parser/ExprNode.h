@@ -229,16 +229,29 @@ class LValueNode : public ExprNode {
         bool isArray() const {
             return is_array; // Return whether the identifier is an array
         }
+
+        bool isParam() const {
+            return identifier->is_param; // Return whether the identifier is a parameter
+        }
         std::shared_ptr<ExprNode> getIndex() const {
             return index; // Return the index expression if it exists
         }
         void setIndex(std::shared_ptr<ExprNode> index) {
             this->index = std::move(index); // Set the index expression for the identifier
         }
+
+        void setIndexLen(int len) {
+            index_len = len;
+        }
+
+        int getIndexLen() const {
+            return index_len; // Return the length of the index if it is an array
+        }
     private:
         std::shared_ptr<Symbol> identifier;
         bool is_array = false; // Flag to indicate if the identifier is an array
         std::shared_ptr<ExprNode> index;
+        int index_len = 0; // Length of the index if it is an array, used for array initialization
 };
 
 

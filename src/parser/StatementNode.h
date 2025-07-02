@@ -82,7 +82,6 @@ class VariableDeclareNode : public StatementNode {
                 ret += std::to_string(dim) + "][";
             }
             ret.pop_back(); // Remove the last '['
-            ret += "]";
             return ret; // Return the string representation of the dimensions
         }
 
@@ -309,11 +308,54 @@ class ForStatementNode : public StatementNode {
 
 };
 
+class FunctionParamNode : public StatementNode {
+    public:
+        FunctionParamNode() = default;
+
+        void addParam(std::shared_ptr<Symbol> param) {
+            params.push_back(param); // Add a new parameter to the function
+        }
+
+        std::vector<std::shared_ptr<Symbol>> getParams() const {
+            return params; // Return the list of parameters
+        }
+
+        std::string convertTypeToString(PrimitiveType type) const {
+            switch (type) {
+                case P_INT: return "int";
+                case P_FLOAT: return "float";
+                case P_CHAR: return "char";
+                case P_LONG: return "long";
+                case P_VOID: return "void";
+                case P_INTPTR: return "int*";
+                case P_FLOATPTR: return "float*";
+                case P_CHARPTR: return "char*";
+                case P_LONGPTR: return "long*";
+                case P_INTARR: return "int[]";
+                case P_FLOATARR: return "float[]";
+                case P_CHARARR: return "char[]";
+                case P_LONGARR: return "long[]";
+                default: return "unknown";
+            }
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Function Parameters: " << std::endl;
+            for (const auto& param : params) {
+                std::cout << prettyPrint(prefix + "\t") << "Parameter: " << param->name 
+                          << ", Type: " << convertTypeToString(param->type) << std::endl; // Print each parameter
+            }
+        }
+
+    private:
+        std::vector<std::shared_ptr<Symbol>> params; // List of parameters for the function
+};
+
 // TODO: 暂时不支持带参数的函数
 class FunctionDeclareNode : public  StatementNode {
     public:
-        FunctionDeclareNode(std::string identifier, PrimitiveType return_type, std::shared_ptr<BlockNode> body)
-            : identifier(std::move(identifier)), return_type(return_type), body(std::move(body)) {
+        FunctionDeclareNode(std::string identifier, PrimitiveType return_type, std::shared_ptr<BlockNode> body, std::shared_ptr<FunctionParamNode> params = nullptr)
+            : params(std::move(params)), identifier(std::move(identifier)), return_type(return_type), body(std::move(body)) {
             stmt_type = S_FUNCTDEF; // Set the statement type to variable declaration
             type = P_NONE;
         }
@@ -367,7 +409,12 @@ class FunctionDeclareNode : public  StatementNode {
             return body; // Return the function body
         }
 
+        std::shared_ptr<FunctionParamNode> getParams() const {
+            return params; // Return the function parameters
+        }
+
     private:
+        std::shared_ptr<FunctionParamNode> params; // Function parameters
         std::string identifier;
         PrimitiveType return_type;
         std::shared_ptr<BlockNode> body;

@@ -235,6 +235,13 @@ class GenCode {
         Reg cgshr(Reg reg1, Reg reg2) {
             return assemblyCode->cgshr(reg1, reg2);
         }
+
+        void cgresetparamcount() {
+            assemblyCode->cgresetparamcount(); // Reset the parameter count for the function
+        }
+        Reg cgparamaddr(Symbol identifier) {
+            return assemblyCode->cgparamaddr(identifier); // Get the address of the parameter in the function
+        }
         Reg walkPragram(const std::shared_ptr<Pragram>& ast);
         Reg walkStatement(const std::shared_ptr<StatementNode>& ast);
         Reg walkExpr(const std::shared_ptr<ExprNode>& ast);
@@ -244,4 +251,5 @@ class GenCode {
         void walkReturn(const std::shared_ptr<ReturnStatementNode>& ast);
         Reg transformType(PrimitiveType type, PrimitiveType target_type, Reg reg);
         void localArrayInit(const std::shared_ptr<ArrayInitializer>& init);
+        void walkFunctionParam(const std::shared_ptr<FunctionParamNode>& ast);
 };

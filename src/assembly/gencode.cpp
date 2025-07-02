@@ -154,7 +154,9 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         // 在这一步，指针类型会被转换为P_LONG寄存器
         if (!x->isArray()) return cgloadsym(x->getIdentifier(), x->getCalculateType()); // Load the global variable into a register
         else {
-            Reg base = cgaddress(x->getIdentifier()); // Load the base address of the array into a register
+            Reg base;
+            if (x->isParam()) base = cgloadsym(x->getIdentifier(), x->getCalculateType());
+            else base = cgaddress(x->getIdentifier()); // Load the base address of the array into a register
             if (x->getIndex() != nullptr){
                 Reg index = walkExpr(x->getIndex()); // Walk the index expression
                 assert(index.type == P_INT);
@@ -336,6 +338,16 @@ void GenCode::walkFunction(const std::shared_ptr<FunctionDeclareNode>& ast) {
     walkStatement(ast->getBody()); // Walk the function body to generate code
 }
 
+void GenCode::walkFunctionParam(const std::shared_ptr<FunctionParamNode>& ast) {
+    cgresetparamcount(); // Reset the parameter count for the function
+    for (const auto &identifier: ast->getParams()) {
+        Reg reg = cgparamaddr(*identifier);
+        if (reg.type == P_NONE) continue;
+        cgstorsym(reg, *identifier, reg.type); // Store the parameter address in the symbol table
+        // assemblyCode->freereg(reg); // Free the register after use
+    }
+}
+
 Reg GenCode::walkPragram(const std::shared_ptr<Pragram>& ast) {
     for (const auto &x: ast->getGlobalVariables()) {
         for (const auto &identifier: x->getIdentifiers()) {
@@ -350,6 +362,7 @@ Reg GenCode::walkPragram(const std::shared_ptr<Pragram>& ast) {
         std::string func_name = x->getIdentifier() ;
         Function func = symbol_table.getFunction(func_name); // Get the function from the symbol table
         cgfuncpreamble(func); // Generate function preamble code
+        walkFunctionParam(x->getParams()); // Walk the function parameters to generate code
         if (func_name == "main") {
             // 全局变量初始化
             for (const auto &x: ast->getGlobalVariables()) {

@@ -106,8 +106,11 @@ struct Symbol {
     int size;
     bool is_array;
     bool is_global;
+    bool is_param;
     int pos_in_stack; // Position in stack for local variables, if applicable
     std::vector<int> array_dimensions; // Dimensions for array types, if applicable
+
+    Symbol() = default; // Default constructor for Symbol
 
     Symbol(std::string name, PrimitiveType type, int size, bool is_array, bool is_global, int pos_in_stack, std::vector<int> array_dimensions)
         : name(std::move(name)), type(type), size(size), is_array(is_array), is_global(is_global), pos_in_stack(pos_in_stack), array_dimensions(std::move(array_dimensions)) {}
@@ -121,9 +124,9 @@ struct Symbol {
         if (!is_array || depth >= array_dimensions.size()) {
             throw std::runtime_error("Symbol::getArrayBaseOffset: Invalid depth for array dimensions");
         }
-        int offset = size;
-        for (int i = 0; i <= depth; ++i) {
-            offset /= array_dimensions[i]; // Calculate the base offset based on dimensions
+        int offset = 1;
+        for (int i = depth + 1; i < array_dimensions.size(); ++i) {
+            offset *= array_dimensions[i]; // Calculate the base offset based on dimensions
         }
         return offset;
     }
@@ -140,6 +143,7 @@ struct Symbol {
 struct Function {
     std::string name;
     PrimitiveType return_type;
+    std::vector<std::shared_ptr<Symbol>> params; // Parameters of the function
     bool has_return;
     int stack_size; // Size of the stack frame for the function
 };
@@ -153,10 +157,10 @@ struct SymbolTable {
     int offset_on_stack; // Offset for local variables in the stack
     int current_scope; // Current scope level, starting from 0
     SymbolTable() {
-        addFunction("printint", P_VOID); // Add built-in function for printing integers
-        addFunction("printfloat", P_VOID); // Add built-in function for printing floats
-        addFunction("printchar", P_VOID); // Add built-in function for printing characters
-        addFunction("printlong", P_VOID); // Add built-in function for printing long integers
+        addFunction("printint", P_VOID, {std::make_shared<Symbol>("", P_INT, 4, false, false, 0)}); // Add built-in function for printing integers
+        addFunction("printfloat", P_VOID, {std::make_shared<Symbol>("", P_FLOAT, 8, false, false, 0)}); // Add built-in function for printing floats
+        addFunction("printchar", P_VOID, {std::make_shared<Symbol>("", P_CHAR, 1, false, false, 0)}); // Add built-in function for printing characters
+        addFunction("printlong", P_VOID, {std::make_shared<Symbol>("", P_LONG, 8, false, false, 0)}); // Add built-in function for printing long integers
         symbols.push_back({}); // Initialize the first scope with an empty vector of symbols
         current_scope = 0; // Start with the global scope
     };
@@ -221,20 +225,54 @@ struct SymbolTable {
         throw std::runtime_error("SymbolTable::getSymbol: Symbol not found: " + name);
     }
 
-    void addFunction(std::string name, PrimitiveType return_type) {
+    void addFunction(std::string name, PrimitiveType return_type, std::vector<std::shared_ptr<Symbol>> params) {
         for (const auto& func : functions) {
             if (func.name == name) {
                 throw std::runtime_error("SymbolTable::addFunction: Function already exists: " + name);
             }
         }
-        functions.push_back({name, return_type, false, 8});
+        functions.push_back({name, return_type, params, false, 8});
     }
 
-    void enterFunction() {
+    void enterFunction(std::vector<std::shared_ptr<Symbol>> params) {
         symbols.push_back({}); // Create a new scope for the function
         current_scope++; // Increment the current scope level
         offset_on_stack = -8; // Reset the stack offset for the new function scope
         current_scope_symbols.clear(); // Clear the symbols for the current function scope
+
+        if (params.empty()) return;
+        auto &current_scope = symbols.back(); // Get the current scope's symbols
+
+        int int_param_in_reg_count = 6; // Count of parameters that can be passed in registers
+        int float_param_in_reg_count = 8; // Count of float parameters that can be passed in registers
+        int param_on_stack_st = 16;
+
+        for (const auto& param : params) {
+            for (const auto& symbol : current_scope) {
+                if (symbol->name == param->name) {
+                    throw std::runtime_error("SymbolTable::addFunction: Parameter already exists: " + param->name);
+                }  
+            }
+            // 计算param的size
+            // 这些参数存放在reg上需要转移到栈上
+            int size = param->is_array? 8 : typeToSize(param->type);
+            param->size = size; // Set the size for the parameter
+            param->is_global = false; // Parameters are not global
+            param->is_param = true; // Mark as a parameter
+
+            if ((param->type == P_FLOAT && float_param_in_reg_count > 0) || (param->type != P_FLOAT && int_param_in_reg_count > 0)) {
+                offset_on_stack -= size < 4 ? 4 : size; // Decrease the stack offset for the new parameter
+                param->pos_in_stack = offset_on_stack; // Set the position in stack for the parameter
+            } else {
+                param->pos_in_stack = param_on_stack_st;
+                param_on_stack_st += 8;
+            }
+
+            if (param->type == P_FLOAT) float_param_in_reg_count--;
+            else int_param_in_reg_count--;
+
+            current_scope.push_back(param); // Add to the current scope's symbols
+        }
     }
 
     void exitScope() {
@@ -252,11 +290,11 @@ struct SymbolTable {
         symbols.pop_back(); // Remove the current function scope
         current_scope--; // Decrement the current scope level
 
-        int current_btm = offset_on_stack;
-        for (auto &symbol : current_scope_symbols) {
-            symbol->pos_in_stack = current_btm; 
-            current_btm += symbol->size; // Update the position in stack for each symbol
-        }
+        // int current_btm = offset_on_stack;
+        // for (auto &symbol : current_scope_symbols) {
+        //     symbol->pos_in_stack = current_btm; 
+        //     current_btm += symbol->size; // Update the position in stack for each symbol
+        // }
 
         functions.back().stack_size = -offset_on_stack; // Set the stack size for the function
         functions.back().stack_size += functions.back().stack_size % 16 ? 16 - functions.back().stack_size % 16 : 0;
@@ -390,6 +428,7 @@ struct Value {
 
 struct Reg {
     PrimitiveType type;
+    bool is_param = false;
     int idx;
 };
 
@@ -607,5 +646,16 @@ inline PrimitiveType valueAt(const PrimitiveType &type) {
         case P_LONGPTR: case P_LONGARR : return P_LONG;
         case P_VOIDPTR: return P_VOID; // Return void for void pointer
         default: throw std::runtime_error("VariableDeclareNode: Unknown type for value at pointer declaration");
+    }
+}
+
+inline PrimitiveType arrayTo(PrimitiveType type) {
+    // Convert a primitive type to its corresponding array type
+    switch (type) {
+        case P_INT: return P_INTARR;
+        case P_FLOAT: return P_FLOATARR;
+        case P_CHAR: return P_CHARARR;
+        case P_LONG: return P_LONGARR;
+        default: throw std::runtime_error("SymbolTable::arrayTo: Not an array type");
     }
 }

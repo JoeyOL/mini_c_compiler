@@ -109,6 +109,7 @@ public:
 
     // function_declaration: 'void' identifier '(' ')' compound_statement   ;
     std::shared_ptr<FunctionDeclareNode> parseFunctionDeclare();
+    std::shared_ptr<FunctionParamNode> parseFunctionParam();
     std::shared_ptr<FunctionCallNode> parseFunctionCall();
     std::shared_ptr<ReturnStatementNode> parseReturnStatement();
     std::shared_ptr<Pragram> parsePragram();

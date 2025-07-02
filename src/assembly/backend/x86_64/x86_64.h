@@ -34,10 +34,10 @@ class X86RegisterManager: public RegisterManager {
                     auto& allocated_other = type_to_register_status.at(valid_type);
                     allocated_other[idx] = true;
                 }
-                return Reg{type, idx}; // Return the allocated register
+                return Reg{type, false, idx}; // Return the allocated register
             } else if (type == P_FLOAT) {
                 allocated[idx] = true; // Mark the register as allocated
-                return Reg{type, idx}; // Return the allocated register
+                return Reg{type, false, idx}; // Return the allocated register
             }
             throw std::runtime_error("No free registers available");
         }
@@ -97,13 +97,83 @@ class X86RegisterManager: public RegisterManager {
             return getRegister(reg);
         }
 
+        Reg allocateParamRegister(PrimitiveType type) {
+            if (type == P_FLOAT) {
+                Reg ret;
+                if (float_param_count >= max_float_param_count) {
+                    ret.type = P_NONE; // No more float registers available
+                } else {
+                    ret.type = P_FLOAT;
+                    ret.idx = float_param_count; // Use the next available float register
+                    float_param_count++;
+                }
+                return ret;
+            } else {
+                Reg ret;
+                if (int_param_count >= max_int_param_count) {
+                    ret.type = P_NONE; // No more int registers available
+                    return ret;
+                } 
+                if (type == P_INT || type == P_CHAR || type == P_LONG) {
+                    ret.type = type; // Use int registers for int, char, and long
+                    ret.idx = int_param_count; // Use the next available int register
+                    int_param_count++;
+                } else {
+                    ret.type = P_LONG;
+                    ret.idx = int_param_count; // Use the next available long register
+                    int_param_count++;
+                }
+                return ret;
+            }
+        }
+
+        std::string getParamRegister(Reg reg) const {
+            if (reg.type == P_FLOAT) {
+                if (reg.idx < 0 || reg.idx >= registers_float_param.size()) {
+                    throw std::out_of_range("Float register index out of range");
+                }
+                return registers_float_param[reg.idx];
+            } else if (reg.type == P_INT) {
+                if (reg.idx < 0 || reg.idx >= registers_int_param.size()) {
+                    throw std::out_of_range("Int register index out of range");
+                }
+                return registers_int_param[reg.idx];
+            } else if (reg.type == P_CHAR) {
+                if (reg.idx < 0 || reg.idx >= registers_char_param.size()) {
+                    throw std::out_of_range("Char register index out of range");
+                }
+                return registers_char_param[reg.idx];
+            } else if (reg.type == P_LONG) {
+                if (reg.idx < 0 || reg.idx >= registers_long_param.size()) {
+                    throw std::out_of_range("Long register index out of range");
+                }
+                return registers_long_param[reg.idx];
+            }
+            throw std::runtime_error("Unsupported register type for parameter");
+        }
+
+        void resetParamCount() {
+            int_param_count = 0; // Reset integer parameter count
+            float_param_count = 0; // Reset floating-point parameter count
+        }
+
     private:
         std::map<PrimitiveType, std::vector<std::string>> type_to_registers;
         std::map<PrimitiveType, std::vector<bool>> type_to_register_status;
-        const std::vector<std::string> registers_int = { "%r8d", "%r9d", "%r10d", "%r11d" };
-        const std::vector<std::string> registers_char = { "%r8b", "%r9b", "%r10b", "%r11b" };
-        const std::vector<std::string> registers_long = { "%r8", "%r9", "%r10", "%r11" }; // Long registers for 64-bit operations
-        const std::vector<std::string> registers_float = { "%xmm1", "%xmm2", "%xmm3", "%xmm4" }; // Floating-point registers
+        const std::vector<std::string> registers_int = { "%r10d", "%r11d", "%r12d", "%r13d" };
+        const std::vector<std::string> registers_char = { "%r10b", "%r11b", "%r12b", "%r13b" };
+        const std::vector<std::string> registers_long = { "%r10", "%r11", "%r12", "%r13" }; // Long registers for 64-bit operations
+        const std::vector<std::string> registers_float = { "%xmm8", "%xmm9", "%xmm10", "%xmm11" }; // Floating-point registers
+
+        const std::vector<std::string> registers_float_param = { "%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5", "%xmm6", "%xmm7" }; // Floating-point registers for function parameters
+        const std::vector<std::string> registers_int_param = { "%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d" }; // Integer registers for function parameters
+        const std::vector<std::string> registers_char_param = { "%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"  }; // Char registers for function parameters
+        const std::vector<std::string> registers_long_param = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9" }; // Long registers for function parameters                                                                   
+
+        int int_param_count = 0; // Count of integer parameters
+        int max_int_param_count = 6; // Maximum count of integer parameters
+        int float_param_count = 0; // Count of floating-point parameters
+        int max_float_param_count = 8; // Maximum count of floating-point parameters
 };
 
 
@@ -379,21 +449,28 @@ public:
     Reg cgstorsym(Reg r, Symbol identifer, PrimitiveType type) override {
         type = is_pointer(type) ? P_LONG : type; // Treat pointers as long for storing
         std::string addr = identifer.getAddress();
+        auto getRegister = [this] (Reg reg) {
+            if (reg.is_param) {
+                return regManager->getParamRegister(reg);
+            } else {
+                return regManager->getRegister(reg);
+            }
+        };
         if (type == P_INT) {
             outputFile <<
-            "\tmovl\t" << regManager->getRegister(r) << ", " << addr << "\n";
+            "\tmovl\t" << getRegister(r) << ", " << addr << "\n";
             return r;
         } else if (type == P_CHAR) {
             outputFile <<
-            "\tmovb\t" << regManager->getRegister(r) << ", " << addr << "\n";
+            "\tmovb\t" << getRegister(r) << ", " << addr << "\n";
             return r;
         } else if (type == P_FLOAT) {
             outputFile <<
-            "\tmovsd\t" << regManager->getRegister(r) << ", " << addr << "\n";
+            "\tmovsd\t" << getRegister(r) << ", " << addr << "\n";
             return r;
         } else if (type == P_LONG) {
             outputFile <<
-            "\tmovq\t" << regManager->getRegister(r) << ", " << addr << "\n";
+            "\tmovq\t" << getRegister(r) << ", " << addr << "\n";
             return r; // Return the register containing the stored value
         } else {
             throw std::runtime_error("GenCode::cgstorglob: Unsupported type for storing global variable");
@@ -1010,6 +1087,18 @@ public:
         regManager->freeRegister(r2); // Free the second register after use
         return r1; // Return the register containing the shifted value
     }
+
+    void cgresetparamcount() override {
+        // Reset the parameter count for function calls
+        regManager->resetParamCount();
+    }
+
+    Reg cgparamaddr(Symbol identifier) override {
+        Reg reg = regManager->allocateParamRegister(identifier.type); // Allocate a register for the parameter
+        reg.is_param = true; // Mark the register as a parameter
+        return reg;
+    }
+
 
 private:
     std::unique_ptr<X86RegisterManager> regManager; // Register manager for handling register allocation

@@ -77,5 +77,7 @@ public:
     virtual Reg cgxor(Reg r1, Reg r2) = 0;
     virtual Reg cgand(Reg r1, Reg r2) = 0;
     virtual Reg cgor(Reg r1, Reg r2) = 0;
+    virtual Reg cgparamaddr(Symbol identifier) = 0;
+    virtual void cgresetparamcount() = 0;
 };
 
