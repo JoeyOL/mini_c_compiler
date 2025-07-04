@@ -331,9 +331,9 @@ class ForStatementNode : public StatementNode {
         }
 
     private:
-        std::shared_ptr<StatementNode> preop_stmt;
         std::shared_ptr<ExprNode> condition; // Condition for the while loop
         std::shared_ptr<StatementNode> body; // Body of the while loop
+        std::shared_ptr<StatementNode> preop_stmt;
         std::shared_ptr<StatementNode> postop_stmt;
 
         std::string for_start; // Start label for the for loop

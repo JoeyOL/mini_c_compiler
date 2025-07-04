@@ -21,7 +21,7 @@ class X86RegisterManager: public RegisterManager {
         Reg allocateRegister(PrimitiveType type) override {
             auto& allocated = type_to_register_status.at(type);
             int idx = -1;
-            for (int i = 0; i < allocated.size(); ++i) {
+            for (size_t i = 0; i < allocated.size(); ++i) {
                 if (!allocated[i]) { // Find a free register
                     allocated[i] = true; // Mark the register as allocated
                     idx = i;
@@ -42,6 +42,7 @@ class X86RegisterManager: public RegisterManager {
                 allocated[idx] = true; // Mark the register as allocated
                 return Reg{type, false, idx}; // Return the allocated register
             }
+            return Reg{P_NONE, false, -1}; // Return an invalid register if type is unsupported
         }
 
         // Free a register
@@ -50,7 +51,7 @@ class X86RegisterManager: public RegisterManager {
                 std::vector<PrimitiveType> valid_types = {P_INT, P_CHAR, P_LONG};
                 for (const auto& valid_type : valid_types) {
                     auto& allocated = type_to_register_status.at(valid_type);
-                    if (reg.idx < 0 || reg.idx >= allocated.size()) {
+                    if (reg.idx < 0 || reg.idx >= (int)allocated.size()) {
                         throw std::out_of_range("Register index out of range");
                     }
                     if (!allocated[reg.idx]) {
@@ -60,7 +61,7 @@ class X86RegisterManager: public RegisterManager {
                 }
             } else if (reg.type == P_FLOAT) {
                 auto& allocated = type_to_register_status.at(P_FLOAT);
-                if (reg.idx < 0 || reg.idx >= allocated.size()) {
+                if (reg.idx < 0 || reg.idx >= (int)allocated.size()) {
                     throw std::out_of_range("Register index out of range");
                 }
                 if (!allocated[reg.idx]) {
@@ -76,7 +77,7 @@ class X86RegisterManager: public RegisterManager {
         // Get the current register count
         void freeAllRegister() override {
             for (auto& [type, allocated] : type_to_register_status) {
-                for (int i = 0; i < allocated.size(); ++i) {
+                for (size_t i = 0; i < allocated.size(); ++i) {
                     allocated[i] = false; // Mark all registers as free
                 }
             }
@@ -85,7 +86,7 @@ class X86RegisterManager: public RegisterManager {
         std::string getRegister(Reg reg) const override {
             auto registers = type_to_registers.at(reg.type);
             auto& allocated = type_to_register_status.at(reg.type);
-            if (reg.idx < 0 || reg.idx >= registers.size()) {
+            if (reg.idx < 0 || reg.idx >= (int)registers.size()) {
                 throw std::out_of_range("Register index out of range");
             }
             if (!allocated[reg.idx]) {
@@ -131,22 +132,22 @@ class X86RegisterManager: public RegisterManager {
 
         std::string getParamRegister(Reg reg) const {
             if (reg.type == P_FLOAT) {
-                if (reg.idx < 0 || reg.idx >= registers_float_param.size()) {
+                if (reg.idx < 0 || reg.idx >= (int)registers_float_param.size()) {
                     throw std::out_of_range("Float register index out of range");
                 }
                 return registers_float_param[reg.idx];
             } else if (reg.type == P_INT) {
-                if (reg.idx < 0 || reg.idx >= registers_int_param.size()) {
+                if (reg.idx < 0 || reg.idx >= (int)registers_int_param.size()) {
                     throw std::out_of_range("Int register index out of range");
                 }
                 return registers_int_param[reg.idx];
             } else if (reg.type == P_CHAR) {
-                if (reg.idx < 0 || reg.idx >= registers_char_param.size()) {
+                if (reg.idx < 0 || reg.idx >= (int)registers_char_param.size()) {
                     throw std::out_of_range("Char register index out of range");
                 }
                 return registers_char_param[reg.idx];
             } else if (reg.type == P_LONG) {
-                if (reg.idx < 0 || reg.idx >= registers_long_param.size()) {
+                if (reg.idx < 0 || reg.idx >= (int)registers_long_param.size()) {
                     throw std::out_of_range("Long register index out of range");
                 }
                 return registers_long_param[reg.idx];
@@ -163,14 +164,14 @@ class X86RegisterManager: public RegisterManager {
             auto long_allocated = type_to_register_status.at(P_LONG);
             auto float_allocated = type_to_register_status.at(P_FLOAT);
             std::vector<Reg> allocated_registers;
-            for (int i = 0; i < long_allocated.size(); ++i) {
+            for (size_t i = 0; i < long_allocated.size(); ++i) {
                 if (long_allocated[i]) {
-                    allocated_registers.push_back(Reg{P_LONG, false, i});
+                    allocated_registers.push_back(Reg{P_LONG, false, (int)i});
                 }
             }
-            for (int i = 0; i < float_allocated.size(); ++i) {
+            for (size_t i = 0; i < float_allocated.size(); ++i) {
                 if (float_allocated[i]) {
-                    allocated_registers.push_back(Reg{P_FLOAT, false, i});
+                    allocated_registers.push_back(Reg{P_FLOAT, false, (int)i});
                 }
             }
             return allocated_registers;
@@ -473,6 +474,7 @@ public:
             reg.type = P_LONG;
             return reg;
         } 
+        throw std::runtime_error("GenCode::cgloadsym: Unsupported type for loading global variable");
     }
 
     Reg cgstorsym(Reg r, Symbol identifer, PrimitiveType type) override {
@@ -841,6 +843,8 @@ public:
             case P_FLOAT:
                 outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n";
                 break;
+            default:
+                throw std::runtime_error("GenCode::cgreturn: Unsupported register type for return");
         }
         if (reg.type != P_VOID) regManager->freeRegister(reg); // Free the register after use
         cgjump(end_label);
@@ -1213,6 +1217,6 @@ public:
     }
 
 private:
-    std::unique_ptr<X86RegisterManager> regManager; // Register manager for handling register allocation
     std::ofstream outputFile; // Output file stream for writing assembly code
+    std::unique_ptr<X86RegisterManager> regManager; // Register manager for handling register allocation
 };

@@ -160,6 +160,8 @@ void Semantic::checkStatement(std::shared_ptr<StatementNode> stmt) {
         case S_RETURN:
             checkReturnStatement(std::dynamic_pointer_cast<ReturnStatementNode>(stmt));
             break;
+        default:
+            break;
     }
 }
 

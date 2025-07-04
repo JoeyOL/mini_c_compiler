@@ -314,7 +314,6 @@ bool Scanner::scan(Token& token) {
     } else if (c == '^') {
         token.type = T_XOR; // Assuming T_XOR is defined in TokenType
     } else {
-Error:
         throw std::runtime_error("Unexpected character: " + std::string(1, c) 
                                  + " at line " + std::to_string(line_no) 
                                  + ", column " + std::to_string(column_no));

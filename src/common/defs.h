@@ -87,7 +87,7 @@ inline bool is_array(PrimitiveType type) {
 
 enum StmtType {
     S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR, S_FUNCTDEF,
-    S_FUNCTCALL, S_BREAK, S_CONTINUE
+    S_BREAK, S_CONTINUE
 };
 
 enum ExprType {

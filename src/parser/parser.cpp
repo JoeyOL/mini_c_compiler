@@ -154,7 +154,7 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
     }
     std::shared_ptr<LValueNode> lvaule = std::make_shared<LValueNode>(sym, left);
     lvaule->setIndexLen(depth); // Set the index length for the lvalue
-    if (depth == sym->array_dimensions.size()) {
+    if (depth == (int)sym->array_dimensions.size()) {
         std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_DEREF, lvaule, valueAt(sym->type));
         return ret;
     } else {
@@ -401,7 +401,7 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
 }
 
 std::shared_ptr<ArrayInitializer> Parser::parseArrayInitializer(std::shared_ptr<Symbol>sym, std::vector<int> &dimensions, int depth) {
-    if (depth >= dimensions.size()) {
+    if (depth >= (int)dimensions.size()) {
         throw std::runtime_error("Parser::parseArrayInitializer: Depth exceeds dimensions size at line " + 
             std::to_string(peek().line_no) + ", column " + 
             std::to_string(peek().column_no));
