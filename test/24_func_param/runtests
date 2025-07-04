@@ -1,0 +1,27 @@
+#!/bin/sh
+# Run each test and compare
+# against known good output
+
+if [ ! -f build/comp ]
+then echo "Need to build comp first!"; exit 1
+fi
+
+for i in test/24_func_param/input*
+do if [ ! -f "test/24_func_param/out.${i##*/}" ]
+   then echo "Can't run test on ${i##*/}, no output file!"
+   else
+     echo -n ${i##*/}
+     ./build/comp $i -disable_log
+     cc -o output output.s src/lib/print.c 
+     ./output > test/24_func_param/trial.${i##*/}
+     sed -i 's/\r//' test/24_func_param/out.${i##*/}
+     cmp -s "test/24_func_param/out.${i##*/}" "test/24_func_param/trial.${i##*/}"
+     if [ "$?" -eq "1" ]
+     then echo ": failed"
+       diff -c "test/24_func_param/out.${i##*/}" "test/24_func_param/trial.${i##*/}"
+       echo
+     else echo ": OK"
+     fi
+          rm -f output output.s "test/24_func_param/trial.${i##*/}"
+   fi
+done
