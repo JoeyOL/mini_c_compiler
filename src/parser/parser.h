@@ -117,6 +117,8 @@ public:
 
 private:
     std::vector<Token> &toks;
+    std::vector<std::string> loop_st_labels; // Stack for loop start labels
+    std::vector<std::string> loop_end_labels; // Stack for loop end labels
     size_t current = 0;
     std::shared_ptr<ExprNode> parimary();
     std::shared_ptr<ExprNode> prefixExpr();

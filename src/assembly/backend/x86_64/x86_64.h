@@ -28,6 +28,9 @@ class X86RegisterManager: public RegisterManager {
                     break;
                 }
             }
+            if (idx == -1) {
+                throw std::runtime_error("No free registers available");
+            }
             if (type == P_INT || type == P_LONG || type == P_CHAR) {
                 std::vector<PrimitiveType> valid_types = {P_INT, P_CHAR, P_LONG};
                 for (const auto& valid_type : valid_types) {
@@ -39,7 +42,6 @@ class X86RegisterManager: public RegisterManager {
                 allocated[idx] = true; // Mark the register as allocated
                 return Reg{type, false, idx}; // Return the allocated register
             }
-            throw std::runtime_error("No free registers available");
         }
 
         // Free a register
@@ -157,6 +159,23 @@ class X86RegisterManager: public RegisterManager {
             float_param_count = 0; // Reset floating-point parameter count
         }
 
+        std::vector<Reg> getAllocatedRegister() const {
+            auto long_allocated = type_to_register_status.at(P_LONG);
+            auto float_allocated = type_to_register_status.at(P_FLOAT);
+            std::vector<Reg> allocated_registers;
+            for (int i = 0; i < long_allocated.size(); ++i) {
+                if (long_allocated[i]) {
+                    allocated_registers.push_back(Reg{P_LONG, false, i});
+                }
+            }
+            for (int i = 0; i < float_allocated.size(); ++i) {
+                if (float_allocated[i]) {
+                    allocated_registers.push_back(Reg{P_FLOAT, false, i});
+                }
+            }
+            return allocated_registers;
+        }
+
     private:
         std::map<PrimitiveType, std::vector<std::string>> type_to_registers;
         std::map<PrimitiveType, std::vector<bool>> type_to_register_status;
@@ -214,16 +233,19 @@ public:
         if (reg1.type != reg2.type) {
             throw std::runtime_error("GenCode::cgadd: Registers must be of the same type");
         }
-        PrimitiveType type = reg1.type;
 
         switch (reg1.type) {
             case P_INT:
+                outputFile << "\taddl\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
+                regManager->freeRegister(reg2);
+                break;
             case P_CHAR:
+                outputFile << "\taddb\t" << regManager->getRegisterLower8bit(reg2) << ", " << regManager->getRegisterLower8bit(reg1) << "\n";
+                regManager->freeRegister(reg2);
+                break;
             case P_LONG:
-                reg1.type = P_LONG; reg2.type = P_LONG; 
                 outputFile << "\taddq\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
                 regManager->freeRegister(reg2);
-                reg1.type = type;
                 break;
             case P_FLOAT:
                 outputFile << "\taddsd\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
@@ -239,16 +261,19 @@ public:
         if (reg1.type != reg2.type) {
             throw std::runtime_error("GenCode::cgadd: Registers must be of the same type");
         }
-        PrimitiveType type = reg1.type;
         // Subtract the value in reg2 from reg1 and return the result in reg1
         switch (reg1.type) {
             case P_INT:
+                outputFile << "\tsubl\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
+                regManager->freeRegister(reg2);
+                break;
             case P_CHAR:
+                outputFile << "\tsubb\t" << regManager->getRegisterLower8bit(reg2) << ", " << regManager->getRegisterLower8bit(reg1) << "\n";
+                regManager->freeRegister(reg2);
+                break;
             case P_LONG:
-                reg1.type = P_LONG; reg2.type = P_LONG; 
                 outputFile << "\tsubq\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
                 regManager->freeRegister(reg2);
-                reg1.type = type;
                 break;
             case P_FLOAT:
                 outputFile << "\tsubsd\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
@@ -262,15 +287,16 @@ public:
 
     Reg cgneg(Reg reg) override {
         // Negate the value in the specified register
-        PrimitiveType type = reg.type;
 
         switch (reg.type) {
             case P_INT:
+                outputFile << "\tnegl\t" << regManager->getRegister(reg) << "\n"; // Negate the value in the register
+                break;
             case P_LONG:
+                outputFile << "\tnegq\t" << regManager->getRegister(reg) << "\n"; // Negate the value in the register
+                break;
             case P_CHAR:
-                reg.type = P_LONG; 
-                outputFile << "\tnegq\t" << regManager->getRegister(reg) << "\n";
-                reg.type = type;
+                outputFile << "\tnegb\t" << regManager->getRegister(reg) << "\n";
                 break;
             case P_FLOAT:
                 outputFile << "\tnegsd\t" << regManager->getRegister(reg) << "\n";
@@ -285,16 +311,21 @@ public:
         if (reg1.type != reg2.type) {
             throw std::runtime_error("GenCode::cgadd: Registers must be of the same type");
         }
-        PrimitiveType type = reg1.type;
 
         switch (reg1.type) {
             case P_INT:
+                outputFile << "\timull\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
+                regManager->freeRegister(reg2);
+                break;
             case P_CHAR:
-            case P_LONG:
-                reg1.type = P_LONG; reg2.type = P_LONG; 
+                reg1.type = reg2.type = P_LONG;
                 outputFile << "\timulq\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
                 regManager->freeRegister(reg2);
-                reg1.type = type;
+                reg1.type = P_CHAR; // Restore the original type
+                break;
+            case P_LONG:
+                outputFile << "\timulq\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
+                regManager->freeRegister(reg2);
                 break;
             case P_FLOAT:
                 outputFile << "\tmulsd\t" << regManager->getRegister(reg2) << ", " << regManager->getRegister(reg1) << "\n";
@@ -311,25 +342,68 @@ public:
         if (reg1.type != reg2.type) {
             throw std::runtime_error("GenCode::cgadd: Registers must be of the same type");
         }
-        PrimitiveType type = reg1.type;
         switch (reg1.type) {
             case P_INT:
+                outputFile << "\tmovl\t" << regManager->getRegister(reg1) << ", %eax\n"; // Move reg1 to eax
+                outputFile << "\tcqto\n"; // Sign-extend eax to rdx:rax
+                outputFile << "\tidivl\t" << regManager->getRegister(reg2) << "\n"; // Divide rdx:rax by reg2
+                outputFile << "\tmovl\t%eax, " << regManager->getRegister(reg1) << "\n"; // Move result back to reg1
+                regManager->freeRegister(reg2);
+                break;
             case P_CHAR:
+                outputFile << "\tmovb\t" << regManager->getRegisterLower8bit(reg1) << ", %al\n"; // Move reg1 to al
+                outputFile << "\tcqto\n"; // Sign-extend al to rdx:rax
+                outputFile << "\tidivb\t" << regManager->getRegisterLower8bit(reg2) << "\n"; // Divide rdx:rax by reg2
+                outputFile << "\tmovb\t%al, " << regManager->getRegisterLower8bit(reg1) << "\n"; // Move result back to reg1
+                regManager->freeRegister(reg2);
+                break;
             case P_LONG:
-                reg1.type = P_LONG; reg2.type = P_LONG;
                 outputFile << "\tmovq\t" << regManager->getRegister(reg1) << ", %rax\n"; // Move reg1 to rax
                 outputFile << "\tcqto\n"; // Sign-extend rax to rdx:rax
                 outputFile << "\tidivq\t" << regManager->getRegister(reg2) << "\n"; // Divide rdx:rax by reg2
                 outputFile << "\tmovq\t%rax, " << regManager->getRegister(reg1) << "\n"; // Move result back to reg1
                 regManager->freeRegister(reg2);
-                reg1.type = type; // Restore the original type
                 break;
             case P_FLOAT:
                 outputFile << "\tdivsd\t" << regManager->getRegister(reg2) << "," << regManager->getRegister(reg1) << "\n"; // Divide xmm0 by xmm1
                 regManager->freeRegister(reg2);
                 break;
+            default:
+                throw std::runtime_error("GenCode::cgdiv: Division operation is not supported");
         }
 
+        return reg1; // Return the register containing the result
+    }
+
+    Reg cgmod(Reg reg1, Reg reg2) override {
+        if (reg1.type != reg2.type) {
+            throw std::runtime_error("GenCode::cgmod: Registers must be of the same type");
+        }
+        switch (reg1.type) {
+            case P_INT:
+                outputFile << "\tmovl\t" << regManager->getRegister(reg1) << ", %eax\n"; // Move reg1 to eax
+                outputFile << "\tcqto\n"; // Sign-extend eax to rdx:rax
+                outputFile << "\tidivl\t" << regManager->getRegister(reg2) << "\n"; // Divide rdx:rax by reg2
+                outputFile << "\tmovl\t%edx, " << regManager->getRegister(reg1) << "\n"; // Move remainder to reg1
+                regManager->freeRegister(reg2);
+                break;
+            case P_CHAR:
+                outputFile << "\tmovb\t" << regManager->getRegisterLower8bit(reg1) << ", %al\n"; // Move reg1 to al
+                outputFile << "\tcqto\n"; // Sign-extend al to rdx:rax
+                outputFile << "\tidivb\t" << regManager->getRegisterLower8bit(reg2) << "\n"; // Divide rdx:rax by reg2
+                outputFile << "\tmovb\t%dl, " << regManager->getRegisterLower8bit(reg1) << "\n"; // Move remainder to reg1
+                regManager->freeRegister(reg2);
+                break;
+            case P_LONG:
+                outputFile << "\tmovq\t" << regManager->getRegister(reg1) << ", %rax\n"; // Move reg1 to rax
+                outputFile << "\tcqto\n"; // Sign-extend rax to rdx:rax
+                outputFile << "\tidivq\t" << regManager->getRegister(reg2) << "\n"; // Divide rdx:rax by reg2
+                outputFile << "\tmovq\t%rdx, " << regManager->getRegister(reg1) << "\n"; // Move remainder to reg1
+                regManager->freeRegister(reg2);
+                break;
+            default:
+                throw std::runtime_error("GenCode::cgmod: Modulo operation is not supported");
+        }  
         return reg1; // Return the register containing the result
     }
 
@@ -365,49 +439,6 @@ public:
         cgfloatconst(); // Generate float constants section
         cgstringconst(); // Generate string constants section
         regManager->freeAllRegister(); // Free all registers at the start
-        // outputFile<< "\t.text\n"
-        //     ".LC0:\n"
-        //     "\t.string\t\"%d\\n\"\n"
-        //     "printint:\n"
-        //     "\tpushq\t%rbp\n"
-        //     "\tmovq\t%rsp, %rbp\n"
-        //     "\tsubq\t$16, %rsp\n"
-        //     "\tmovl\t%edi, -4(%rbp)\n"
-        //     "\tmovl\t-4(%rbp), %eax\n"
-        //     "\tmovl\t%eax, %esi\n"
-        //     "\tleaq	.LC0(%rip), %rdi\n"
-        //     "\tmovl	$0, %eax\n"
-        //     "\tcall	printf@PLT\n" "\tnop\n" "\tleave\n" "\tret\n" "\n"
-        //     ".LC1:\n"
-        //     "\t.string\t\"%f\\n\"\n"
-        //     "printfloat:\n"
-        //     "\tpushq\t%rbp\n"
-        //     "\tmovq\t%rsp, %rbp\n"
-        //     "\tsubq\t$16, %rsp\n"
-        //     "\tmovsd\t%xmm0, -8(%rbp)\n"
-        //     "\tmovsd\t-8(%rbp), %xmm0\n"
-        //     "\tleaq\t.LC1(%rip), %rdi\n"
-        //     "\tmovl\t$1, %eax\n"
-        //     "\tcall\tprintf@PLT\n"
-        //     "\tnop\n"
-        //     "\tleave\n"
-        //     "\tret\n"
-        //     ".LC2:\n"
-        //     "\t.string\t\"%ld\\n\"\n"
-        //     "printlong:\n"
-        //     "\tpushq\t%rbp\n"
-        //     "\tmovq\t%rsp, %rbp\n"
-        //     "\tsubq\t$16, %rsp\n"
-        //     "\tmovq\t%rdi, -8(%rbp)\n"
-        //     "\tmovq\t-8(%rbp), %rax\n"
-        //     "\tmovq\t%rax, %xmm0\n"
-        //     "\tmovl\t$2, %eax\n"
-        //     "\tmovq\t.LC2(%rip), %rsi\n"
-        //     "\tmovq\t%rax, %rdi\n"
-        //     "\tcall\tprintf@PLT\n"
-        //     "\tnop\n"
-        //     "\tleave\n"
-        //     "\tret\n";
       }
 
     void cgpostamble() override {
@@ -429,10 +460,8 @@ public:
             reg.type = P_INT; // Set the type of the register to int
             return reg; // Return the register containing the loaded value
         } else if (type == P_CHAR) {
-            reg.type = P_LONG;
             outputFile <<
-                "\tmovzbq\t" << addr << ", " << regManager->getRegister(reg) << "\n";
-            reg.type = P_CHAR;
+                "\tmovb\t" << addr << ", " << regManager->getRegister(reg) << "\n";
             return reg; // Return the register containing the loaded value
         } else if (type == P_FLOAT) {
             outputFile << 
@@ -780,25 +809,22 @@ public:
         return reg; // Return the register containing the long
     }
 
-    Reg cgcall(const char *name, const Reg reg) override {
-        if (reg.idx != -1) {
-            if (reg.type != P_FLOAT) {
-                Reg r1 = Reg{.type = P_LONG, .idx = reg.idx}; // Create a temporary register for the function call
-                outputFile << "\tmovq\t" << regManager->getRegister(r1) << ", %rdi\n"; // Move the register value to rdi for the function call
-            } else {
-                outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n"; // Move the float value to xmm0 for the function call
-            }
-        }
-        Reg out = regManager->allocateRegister(reg.type);
-        Reg r1 = Reg{.type = P_LONG, .idx = out.idx}; // Create a temporary register for the function call
+    Reg cgcall(const char *name, PrimitiveType ret_type) override {
         outputFile << "\tcall\t" << name << "\n"; // Call the specified function
-        if (reg.type == P_FLOAT) {
-            outputFile << "\tmovsd\t%xmm0, " << regManager->getRegister(out) << "\n";
-
+        if (ret_type != P_VOID) {
+            Reg out = regManager->allocateRegister(ret_type);
+            if (ret_type == P_FLOAT) {
+                outputFile << "\tmovsd\t%xmm0, " << regManager->getRegister(out) << "\n";
+    
+            }
+            else {
+                out.type = P_LONG;
+                outputFile << "\tmovq\t%rax, " << regManager->getRegister(out) << "\n";
+                out.type = ret_type; // Set the return type of the register
+            }
+            return out;
         }
-        else outputFile << "\tmovq\t%rax, " << regManager->getRegister(r1) << "\n";
-        if (reg.idx != -1) regManager->freeRegister(reg); // Free the original register after the call
-        return out;
+        return Reg{.type = P_NONE, .idx = 0}; // Return an invalid register if the function returns void
     }
 
     void cgreturn(const Reg reg, const char *end_label) override {
@@ -816,7 +842,7 @@ public:
                 outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n";
                 break;
         }
-        regManager->freeRegister(reg); // Free the register after use
+        if (reg.type != P_VOID) regManager->freeRegister(reg); // Free the register after use
         cgjump(end_label);
     }
 
@@ -827,30 +853,28 @@ public:
     }
 
     Reg cgderef(Reg reg, PrimitiveType type) override {
-        Reg float_reg;
+        Reg val_reg = regManager->allocateRegister(valueAt(type)); // Allocate a new register for the dereferenced value
         switch (type) {
             case P_INTPTR: case P_INTARR :
-                outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the value at the address in reg to eax
-                reg.type = P_INT; // Update the register type to int
+                outputFile << "\tmovl\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(val_reg) << "\n"; // Move the value at the address in reg to eax
+                regManager->freeRegister(reg); // Free the dereferenced value register
                 break;
             case P_CHARPTR: case P_CHARARR:
-                outputFile << "\tmovzbq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the byte at the address in reg to al
-                reg.type = P_CHAR; // Update the register type to char
+                outputFile << "\tmovb\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(val_reg) << "\n"; // Move the byte at the address in reg to al
+                regManager->freeRegister(reg); // Free the dereferenced value register
                 break;
             case P_FLOATPTR: case P_FLOATARR:
-                float_reg = regManager->allocateRegister(P_FLOAT); // Allocate a new register for the float value
-                outputFile << "\tmovsd\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(float_reg) << "\n";; // Move the double at the address in reg to xmm0
-                regManager->freeRegister(reg); // Free the original register
-                reg = float_reg;// Update the register type to float
+                outputFile << "\tmovsd\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(val_reg) << "\n";; // Move the double at the address in reg to xmm0
+                regManager->freeRegister(reg); // Free the dereferenced value register
                 break;
             case P_LONGPTR: case P_LONGARR:
-                outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(reg) << "\n"; // Move the value at the address in reg to rax
-                reg.type = P_LONG; // Update the register type to long
+                outputFile << "\tmovq\t(" << regManager->getRegister(reg) << ")" << ", " << regManager->getRegister(val_reg) << "\n"; // Move the value at the address in reg to rax
+                regManager->freeRegister(reg); // Free the dereferenced value register
                 break;
             default:
                 throw std::runtime_error("GenCode::cgderef: Unsupported type for dereferencing");
         }
-        return reg; // Return the register containing the dereferenced value
+        return val_reg; // Return the register containing the dereferenced value
     }
 
     Reg cgshlconst(Reg reg, int value) override {
@@ -935,9 +959,9 @@ public:
     void cgdec(Symbol identifier, PrimitiveType type) override {
         // Decrement the value of the global variable by 1
         if (type == P_INT) {
-            outputFile << "\tdecb\t" << identifier.getAddress() << "\n"; // Decrement int value
+            outputFile << "\tdecl\t" << identifier.getAddress() << "\n"; // Decrement int value
         } else if (type == P_CHAR) {
-            outputFile << "\tdecl\t" << identifier.getAddress() << "\n"; // Decrement char value
+            outputFile << "\tdecb\t" << identifier.getAddress() << "\n"; // Decrement char value
         } else if (type == P_LONG || type == P_CHARPTR) {
             outputFile << "\tdecq\t" << identifier.getAddress() << "\n"; // Decrement long value
         } else if (type == P_FLOAT) {
@@ -1099,6 +1123,94 @@ public:
         return reg;
     }
 
+    void cgadjuststack(int size) override {
+        // Adjust the stack pointer by the specified size
+        outputFile << "\tsubq\t$" << size << ", %rsp\n"; // Decrease stack pointer by size
+    }
+
+    void cgloadparamtoreg(Reg reg, int idx) override {
+        Reg reg_param =  {.type = reg.type, .is_param = true, .idx = idx}; // Allocate a register for the parameter
+        if (reg.type == P_FLOAT) {
+            outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", " << regManager->getParamRegister(reg_param) << "\n"; // Move float value to parameter register
+        } else if (reg.type == P_INT) {
+            outputFile << "\tmovl\t" << regManager->getRegister(reg) << ", " << regManager->getParamRegister(reg_param) << "\n"; // Move value to parameter register
+        } else if (reg.type == P_LONG) {
+            outputFile << "\tmovq\t" << regManager->getRegister(reg) << ", " << regManager->getParamRegister(reg_param) << "\n"; // Move value to parameter register
+        } else if (reg.type == P_CHAR) {
+            outputFile << "\tmovb\t" << regManager->getRegister(reg) << ", " << regManager->getParamRegister(reg_param) << "\n"; // Move char value to parameter register
+        } else {
+            throw std::runtime_error("GenCode::cgloadparamtoreg: Unsupported type for loading parameter to register");
+        }
+        regManager->freeRegister(reg); // Free the original register after loading to parameter register
+    }
+
+    void cgloadparamtostack(Reg reg) override {
+        // Load the parameter value from the register to the stack
+        
+        if (reg.type == P_FLOAT) {
+            outputFile << "\tpushsd\t" << regManager->getRegister(reg) << "\n"; // Move float value to stack
+        } else if (reg.type == P_INT || reg.type == P_CHAR || reg.type == P_LONG) {
+            reg.type = P_LONG; // Ensure the register type is long for stack operations
+            outputFile << "\tpushq\t" << regManager->getRegister(reg) << "\n"; // Move value to stack
+        } else {
+            throw std::runtime_error("GenCode::cgloadparamtostack: Unsupported type for loading parameter to stack");
+        }
+        regManager->freeRegister(reg); // Free the register after loading to stack
+    }
+
+    void cglocalarrayzeroinit(int base, int left_size, int current_size, int elem_size) override {
+        base += current_size * elem_size; // Calculate the base address for the local array
+        outputFile << "\tleaq\t" << base << "(%rbp), %rdi\n"; // Load the address of the local array into rax
+        outputFile << "\tmovl\t" << "$" << left_size << ", %ecx\n"; // Load the size of the array into ecx
+        if (elem_size == 4) {
+            outputFile << "\tmovl\t$0, %eax\n"; // Initialize the first element to zero
+            outputFile << "\trep stosl\n"; // Store the zero value in the local array
+        } else if (elem_size == 1) {
+            outputFile << "\tmovb\t$0, %al\n"; // Initialize the first element to zero
+            outputFile << "\trep stosb\n"; // Store the zero value in the local array
+        } else if (elem_size == 8) {
+            outputFile << "\tmovq\t$0, %rax\n"; // Initialize the first element to zero
+            outputFile << "\trep stosq\n"; // Store the zero value in the local array
+        } else {
+            throw std::runtime_error("GenCode::cglocalarrayzeroinit: Unsupported element size for local array initialization");
+        }
+    }
+
+    std::vector<Reg> cgprotectscene() override {
+        std::vector<Reg> used = regManager->getAllocatedRegister();
+        std::vector<Reg> protected_regs; // Vector to store protected registers and their stack offsets
+        if (used.empty()) {
+            return protected_regs; // Return empty vector if no registers are used
+        }
+        if (used.size() % 2) cgadjuststack(8); // Push rax if the number of used registers is odd
+        for (size_t i = 0; i < used.size(); i ++) {
+            Reg reg = used[i];
+            if (reg.type == P_FLOAT) {
+                outputFile << "\tpushsd\t" << regManager->getRegister(reg) << "\n"; // Move float value to stack
+            } else if (reg.type == P_LONG) {
+                outputFile << "\tpushq\t" << regManager->getRegister(reg) << "\n"; // Move value to stack
+            } else {
+                throw std::runtime_error("GenCode::cgloadparamtostack: Unsupported type for loading parameter to stack");
+            }
+            protected_regs.emplace_back(reg); // Store the register and its stack offset
+        }
+        return protected_regs; // Return the vector of protected registers and their stack offsets
+    }
+
+    void cgrestorescene(const std::vector<Reg> &protected_regs) override {
+        // Restore the protected registers from the stack
+        for (auto it = protected_regs.rbegin(); it != protected_regs.rend(); ++it) {
+            Reg reg = *it;
+            if (reg.type == P_FLOAT) {
+                outputFile << "\tpopsd\t" << regManager->getRegister(reg) << "\n"; // Restore float value from stack
+            } else if (reg.type == P_LONG) {
+                outputFile << "\tpopq\t" << regManager->getRegister(reg) << "\n"; // Restore value from stack
+            } else {
+                throw std::runtime_error("GenCode::cgrestorescene: Unsupported type for restoring protected register");
+            }
+        }
+        if (protected_regs.size() % 2) cgadjuststack(-8); // Pop rax if the number of protected registers is odd
+    }
 
 private:
     std::unique_ptr<X86RegisterManager> regManager; // Register manager for handling register allocation

@@ -158,11 +158,11 @@ std::shared_ptr<UnaryExpNode> Parser::parseArrayAccess() {
         std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_DEREF, lvaule, valueAt(sym->type));
         return ret;
     } else {
-        if (depth != sym->array_dimensions.size() - 1) {
-            throw std::runtime_error("Parser::parseArrayAccess: Array access depth mismatch at line " + 
-                std::to_string(tok.line_no) + ", column " + 
-                std::to_string(tok.column_no));
-        }
+        // if (depth != sym->array_dimensions.size() - 1) {
+        //     throw std::runtime_error("Parser::parseArrayAccess: Array access depth mismatch at line " + 
+        //         std::to_string(tok.line_no) + ", column " + 
+        //         std::to_string(tok.column_no));
+        // }
         PrimitiveType point_type = pointTo(sym->type);
         // 只允许 *(p+1) = expr 这种形式，如a[5][5], *(a[5] + 1) = expr
         std::shared_ptr<UnaryExpNode> ret = std::make_shared<UnaryExpNode>(U_ADDR, lvaule, point_type);
@@ -245,6 +245,7 @@ ExprType Parser::arithop(const Token &tok) {
         case T_XOR: return A_XOR; // '^' is treated as bitwise XOR
         case T_LSHIFT: return A_LSHIFT; // '<<' is treated as left
         case T_RSHIFT: return A_RSHIFT; // '>>' is treated as right
+        case T_MOD: return A_MOD; // '%' is treated as modulo
         default:
             throw std::runtime_error("Parser::arithop: Unexpected token type " + 
                 std::to_string(tok.type) + " at line " + 
@@ -324,7 +325,12 @@ std::shared_ptr<PrintStatementNode> Parser::parsePrintStatement() {
 std::shared_ptr<BlockNode> Parser::parseBlock() { 
     symbol_table.enterScope(); // Enter a new scope for the block
     std::shared_ptr<BlockNode> stmts = std::make_shared<BlockNode>();
-    assert(consume().type == T_LBRACE);
+    bool stmt_limit = false;
+    if (peek().type == T_LBRACE) {
+        consume();
+    } else {
+        stmt_limit = true; // If the next token is not '{', we limit the statements to one
+    }
     while (current < toks.size() && peek().type != T_RBRACE) {
         if (peek().type == T_PRINT) {
             std::shared_ptr<StatementNode> stmt = parsePrintStatement();
@@ -358,13 +364,38 @@ std::shared_ptr<BlockNode> Parser::parseBlock() {
             std::shared_ptr<ReturnStatementNode> return_stmt = parseReturnStatement();
             assert(consume().type == T_SEMI);
             stmts->addStatement(return_stmt);
+        } else if (peek().type == T_BREAK) {
+            consume();
+            if (loop_end_labels.empty()) {
+                throw std::runtime_error("Parser::parseBlock: 'break' statement not inside a loop at line " + 
+                    std::to_string(peek().line_no) + ", column " + 
+                    std::to_string(peek().column_no));
+            }
+            std::shared_ptr<BreakStatementNode> break_stmt = std::make_shared<BreakStatementNode>(loop_end_labels.back());
+            assert(consume().type == T_SEMI); // Expect a semicolon after break statement
+            stmts->addStatement(break_stmt);
+        } else if (peek().type == T_CONTINUE) {
+            consume(); // Consume the 'continue' token
+            if (loop_st_labels.empty()) {
+                throw std::runtime_error("Parser::parseBlock: 'continue' statement not inside a loop at line " + 
+                    std::to_string(peek().line_no) + ", column " + 
+                    std::to_string(peek().column_no));
+            }
+            std::shared_ptr<ContinueStatementNode> continue_stmt = std::make_shared<ContinueStatementNode>(loop_st_labels.back());
+            assert(consume().type == T_SEMI); // Expect a semicolon after continue statement
+            stmts->addStatement(continue_stmt);
         } else {
             throw std::runtime_error("Parser::parseStatement: Expected statement at line " + 
                 std::to_string(peek().line_no) + ", column " + 
                 std::to_string(peek().column_no));
         }
+        if (stmt_limit) {
+            break; // If we are limiting to one statement, break after the first statement
+        }
     }
-    assert(consume().type == T_RBRACE);
+    if (!stmt_limit) {
+        assert(consume().type == T_RBRACE);
+    }
     symbol_table.exitScope(); // Exit the scope after parsing the block
     return stmts;
 }
@@ -495,13 +526,23 @@ std::shared_ptr<IfStatementNode> Parser::parseIfStatement() {
     }
 }
 
+
 std::shared_ptr<WhileStatementNode> Parser::parseWhileStatement() {
     assert(consume().type == T_WHILE);
     assert(consume().type == T_LPAREN);
     std::shared_ptr<ExprNode> condition = parseExpressionWithPrecedence(0);
     assert(consume().type == T_RPAREN);
+    std::string while_label_no = labelAllocator.getLabel(LableType::WHILE_LABEL);
+    std::string while_st = "WHILE_START_" + while_label_no;
+    std::string while_end = "WHILE_END_" + while_label_no;
+    loop_st_labels.push_back(while_st); // Push the start label for the loop
+    loop_end_labels.push_back(while_end); // Push the end label for the loop
     std::shared_ptr<BlockNode> body = parseBlock();
-    return std::make_shared<WhileStatementNode>(std::move(condition), std::move(body));
+    auto ret = std::make_shared<WhileStatementNode>(std::move(condition), std::move(body));
+    ret->setLabels(while_st, while_end); // Set the labels for the while statement
+    loop_st_labels.pop_back(); // Pop the start label for the loop
+    loop_end_labels.pop_back(); // Pop the end label for the loop
+    return ret;
 }
 
 // 要么是声明，要么是表达式
@@ -532,9 +573,18 @@ std::shared_ptr<ForStatementNode> Parser::parseForStatement() {
     assert(consume().type == T_SEMI);
     std::shared_ptr<StatementNode> postop_stmt = parseSingleStatement();
     assert(consume().type == T_RPAREN);
+    std::string for_label_no = labelAllocator.getLabel(LableType::FOR_LABEL);
+    std::string for_st = "FOR_START_" + for_label_no;
+    std::string for_end = "FOR_END_" + for_label_no;
+    loop_st_labels.push_back(for_st); // Push the start label for the loop
+    loop_end_labels.push_back(for_end); // Push the end label for the loop
     std::shared_ptr<BlockNode> body = parseBlock();
     symbol_table.exitScope(); // Exit the scope after parsing the for statement
-    return std::make_shared<ForStatementNode>(std::move(preop_stmt), std::move(condition), std::move(body), std::move(postop_stmt));
+    auto ret = std::make_shared<ForStatementNode>(std::move(preop_stmt), std::move(condition), std::move(body), std::move(postop_stmt));
+    ret->setLabels(for_st, for_end); // Set the labels for the for statement
+    loop_st_labels.pop_back(); // Pop the start label for the loop
+    loop_end_labels.pop_back(); // Pop the end label for the loop
+    return ret;
 }
 
 PrimitiveType tokenTypeToPrimitiveType(TokenType type) {
@@ -617,7 +667,13 @@ std::shared_ptr<FunctionParamNode> Parser::parseFunctionParam() {
 // TODO: 目前只支持void类型的无参数函数
 std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
     assert(peek().type == T_VOID || peek().type == T_CHAR || peek().type == T_FLOAT || peek().type == T_LONG || peek().type == T_INT);
-    TokenType return_type = consume().type; // Get the return type of the function
+    PrimitiveType return_type = tokenTypeToPrimitiveType(consume().type); // Get the return type of the function
+
+    while (peek().type == T_STAR) {
+        consume(); // Consume the '*' token for pointer type
+        return_type = pointTo(return_type); // Update the return type to pointer type
+    }
+
     if (current >= toks.size() || peek().type != T_IDENTIFIER) {
         throw std::runtime_error("Parser::parseFunctionDeclare: Expected function name at line " + 
             std::to_string(peek().line_no) + ", column " + 
@@ -628,11 +684,11 @@ std::shared_ptr<FunctionDeclareNode> Parser::parseFunctionDeclare() {
     std::shared_ptr<FunctionParamNode> param = parseFunctionParam(); // Parse the function parameters, if any
     assert(consume().type == T_RPAREN);
     // 处理符号表
-    symbol_table.addFunction(func_name, tokenTypeToPrimitiveType(return_type), param->getParams()); // Add the function to the symbol table
+    symbol_table.addFunction(func_name, return_type, param->getParams()); // Add the function to the symbol table
     symbol_table.enterFunction(param->getParams()); // Enter the function scope with the parameters
 
     std::shared_ptr<BlockNode> body = parseBlock();
-    auto ret = std::make_shared<FunctionDeclareNode>(func_name, tokenTypeToPrimitiveType(return_type), std::move(body), std::move(param));
+    auto ret = std::make_shared<FunctionDeclareNode>(func_name, return_type, std::move(body), std::move(param));
     symbol_table.exitFuction(); // Exit the function scope after parsing the function declaration
     return ret;
 }

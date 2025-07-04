@@ -171,11 +171,12 @@ void Semantic::checkReturnStatement(std::shared_ptr<ReturnStatementNode> node) {
             if (node->getExpression()->getPrimitiveType() != return_type) {
                 throw std::runtime_error("Semantic::checkReturnStatement: Pointer type mismatch in return statement");
             }
+        } else {
+            if (!typeCompatible(return_type, node->getExpression()->getPrimitiveType(), node->isNeedTransform())) {
+                throw std::runtime_error("Semantic::checkReturnStatement: Type mismatch in return statement");
+            }
         }
 
-        if (!typeCompatible(return_type, node->getExpression()->getPrimitiveType(), node->isNeedTransform())) {
-            throw std::runtime_error("Semantic::checkReturnStatement: Type mismatch in return statement");
-        }
         if (node->isNeedTransform()) {
             node->setExpression(std::make_shared<UnaryExpNode>(U_TRANSFORM, node->getExpression(), return_type));
         }
@@ -227,8 +228,7 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
         }
 
         // 指针只能进行加减法
-        if (is_pointer(x->getLeft()->getPrimitiveType()) && !is_pointer(x->getRight()->getPrimitiveType()) || 
-            !is_pointer(x->getLeft()->getPrimitiveType()) && is_pointer(x->getRight()->getPrimitiveType())) {
+        if (is_pointer(x->getLeft()->getPrimitiveType()) || is_pointer(x->getRight()->getPrimitiveType())) {
             if (x->getOp() != A_ADD && x->getOp() != A_SUBTRACT) {
                 throw std::runtime_error("Semantic::checkExpression: Pointer types can only be used with addition or subtraction");
             }
@@ -240,6 +240,13 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
 
         // 获取计算类型
         x->updateCalType();
+
+        if (x->getOp() == A_AND || x->getOp() == A_OR || x->getOp() == A_XOR || x->getOp() == A_MOD) {
+            if (x->getLeft()->getPrimitiveType() == P_FLOAT || x->getRight()->getPrimitiveType() == P_FLOAT) {
+                throw std::runtime_error("Semantic::checkExpression: Bitwise operators can only be applied to int");
+            }
+        }
+
         // 对于左移和右移操作，确保将左值转化为long， 右值转换为char
         if (x->getOp() == A_LSHIFT || x->getOp() == A_RSHIFT) {
             if (!typeCompatible(x->getLeft()->getPrimitiveType(), P_LONG, x->getLeft()->isNeedTransform())) {
@@ -297,10 +304,7 @@ void Semantic::checkExpression(std::shared_ptr<ExprNode> node) {
     } else if (auto x = std::dynamic_pointer_cast<AssignmentNode>(node)) {
         checkAssignment(x);
     } else if (auto x = std::dynamic_pointer_cast<FunctionCallNode>(node)) {
-        auto args = x->getArguments();
-        for (auto arg : args) {
-            checkExpression(arg);
-        }
+        checkFunctionCall(x);
     } else if (auto x = std::dynamic_pointer_cast<ArrayInitializer>(node)) {
         for (auto& elem : x->getElements()) {
             if (auto y = std::dynamic_pointer_cast<ArrayInitializer>(elem)) {
@@ -376,6 +380,8 @@ void Semantic::checkFunctionCall(std::shared_ptr<FunctionCallNode> node) {
         }
 
     }
+    node->setArguments(args);
+    node->updateParamCount();
 }
 
 void Semantic::checkFunctionDeclare(std::shared_ptr<FunctionDeclareNode> node) { 

@@ -277,9 +277,37 @@ class FunctionCallNode : public ExprNode {
             return args; // Return the list of arguments for the function call
         }
 
+        void setArguments(std::vector<std::shared_ptr<ExprNode>> new_args) {
+            args = std::move(new_args); // Set the arguments for the function call
+        }
+
+        void updateParamCount() {
+            int_param_count = 0;
+            float_param_count = 0;
+            for (const auto& arg : args) {
+                PrimitiveType type = arg->getCalculateType();
+                if (type != P_FLOAT) {
+                    int_param_count++;
+                } else {
+                    float_param_count++;
+                }
+            }
+        }
+
+        bool needAdjustStack() {
+            int offset = 0;
+            if (int_param_count > 6) offset += (int_param_count - 6) * 8; // Adjust stack for integer parameters
+            if (float_param_count > 8) offset += (float_param_count - 8) * 8; // Adjust stack for float parameters
+            if (offset % 16 == 0) return false;
+            return true; // Return whether the stack needs to be adjusted
+        }
+
     private:
         std::string identifier; // Identifier for the function being called
         std::vector<std::shared_ptr<ExprNode>> args; // Arguments for the function call
+
+        int int_param_count; // Count of integer parameters
+        int float_param_count; // Count of float parameters
 };
 
 class AssignmentNode : public ExprNode {
@@ -369,12 +397,20 @@ class ArrayInitializer : public ExprNode {
             return max_size - current_size; // Return the number of elements that can still be added
         }
 
+        int getCurrentSize() const {
+            return current_size; // Return the current number of elements in the initializer
+        }   
+
         void setBaseOffset() {
             base_offset = symbol->pos_in_stack; // Set the base offset for the array initializer
         }
 
         void setBaseOffset(int offset) {
             base_offset = offset; // Set the base offset for the array initializer
+        }
+
+        int getBaseOffset() const {
+            return base_offset; // Return the base offset for the array initializer
         }
 
         void getValuePos() {
@@ -394,6 +430,10 @@ class ArrayInitializer : public ExprNode {
 
         std::vector<int> getPosOnStack() const {
             return pos_on_stack; // Return the positions of the values on the stack
+        }
+
+        std::shared_ptr<Symbol> getSymbol() const {
+            return symbol; // Return the symbol for the array being initialized
         }
 
     private:

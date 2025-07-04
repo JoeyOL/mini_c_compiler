@@ -23,6 +23,8 @@ class Scanner {
             {"long", T_LONG},
             {"float", T_FLOAT},
             {"return", T_RETURN},
+            {"break", T_BREAK},
+            {"continue", T_CONTINUE},
         };
         int line_no;
         int column_no;

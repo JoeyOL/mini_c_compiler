@@ -42,7 +42,7 @@ public:
         } else if (l == FLOAT_CONSTANT_LABEL) {
             // Generate a unique label for float constants
             return "FLOAT_CONST_" + std::to_string(floatConstantCounter++);
-        } else if (l = STRING_CONSTANT_LABEL) {
+        } else if (l == STRING_CONSTANT_LABEL) {
             return "STRING_CONST_" + std::to_string(stringConstantCounter++);
         } else {
             throw std::runtime_error("LabelAllocator::getLabel: Unknown label type");
@@ -61,11 +61,11 @@ extern LabelAllocator labelAllocator; // Static label allocator for generating u
 
 
 enum TokenType {
-    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_LBRACKET, T_RBRACKET,
+    T_EOF, T_PLUS, T_MINUS, T_STAR, T_SLASH,  T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_LBRACKET, T_RBRACKET, T_MOD,
     T_IDENTIFIER, T_PRINT, T_IF, T_ELSE, T_WHILE, T_FOR, T_RETURN,
     T_SEMI, T_NUMBER, T_INT, T_ASSIGN, T_COMMA, T_VOID, T_CHAR, T_FLOAT, T_LONG,
     T_LT, T_GT, T_LE, T_GE, T_NE, T_EQ, T_NOT, T_LOGAND, T_LOGOR, T_AMPER, T_OR, T_INVERT, T_INC, T_DEC, T_XOR, T_LSHIFT, T_RSHIFT,
-    T_STRING
+    T_STRING, T_BREAK, T_CONTINUE
 };
 
 enum PrimitiveType {
@@ -87,12 +87,12 @@ inline bool is_array(PrimitiveType type) {
 
 enum StmtType {
     S_PRINT, S_ASSIGN, S_IF, S_WHILE, S_RETURN, S_BLOCK, S_EXPR, S_VARDEF, S_FOR, S_FUNCTDEF,
-    S_FUNCTCALL
+    S_FUNCTCALL, S_BREAK, S_CONTINUE
 };
 
 enum ExprType {
     A_ADD, A_SUBTRACT, A_MULTIPLY, A_DIVIDE, A_XOR, A_LSHIFT, A_RSHIFT,
-    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE, A_AND, A_OR, A_ASSIGN
+    A_EQ, A_NE, A_LT, A_LE, A_GT, A_GE, A_AND, A_OR, A_ASSIGN, A_MOD
 };
 
 enum UnaryOp {
@@ -106,7 +106,7 @@ struct Symbol {
     int size;
     bool is_array;
     bool is_global;
-    bool is_param;
+    bool is_param = false;
     int pos_in_stack; // Position in stack for local variables, if applicable
     std::vector<int> array_dimensions; // Dimensions for array types, if applicable
 
@@ -121,11 +121,11 @@ struct Symbol {
         return name == other_name.name;
     }
     int getArrayBaseOffset(int depth) const {
-        if (!is_array || depth >= array_dimensions.size()) {
+        if (!is_array || depth >= (int)array_dimensions.size()) {
             throw std::runtime_error("Symbol::getArrayBaseOffset: Invalid depth for array dimensions");
         }
         int offset = 1;
-        for (int i = depth + 1; i < array_dimensions.size(); ++i) {
+        for (size_t i = depth + 1; i < array_dimensions.size(); ++i) {
             offset *= array_dimensions[i]; // Calculate the base offset based on dimensions
         }
         return offset;
@@ -161,6 +161,9 @@ struct SymbolTable {
         addFunction("printfloat", P_VOID, {std::make_shared<Symbol>("", P_FLOAT, 8, false, false, 0)}); // Add built-in function for printing floats
         addFunction("printchar", P_VOID, {std::make_shared<Symbol>("", P_CHAR, 1, false, false, 0)}); // Add built-in function for printing characters
         addFunction("printlong", P_VOID, {std::make_shared<Symbol>("", P_LONG, 8, false, false, 0)}); // Add built-in function for printing long integers
+        std::vector<int> dimensions = {-1}; // Dimensions for the array
+        addFunction("printarray", P_VOID, {std::make_shared<Symbol>("", P_INT, 4, false, false, 0), std::make_shared<Symbol>("", P_INTARR, 8, true, false, 0, dimensions)}); // Add built-in function for printing arrays
+        addFunction("printfloatarray", P_VOID, {std::make_shared<Symbol>("", P_INT, 4, false, false, 0), std::make_shared<Symbol>("", P_FLOATARR, 8, true, false, 0, dimensions)}); // Add built-in function for printing float arrays
         symbols.push_back({}); // Initialize the first scope with an empty vector of symbols
         current_scope = 0; // Start with the global scope
     };
@@ -605,6 +608,7 @@ class ValueNode : public ExprNode {
 static const std::map<ExprType, int> precedence = {
     {A_MULTIPLY, 20},
     {A_DIVIDE, 20},
+    {A_MOD, 20},
     {A_ADD, 15},
     {A_SUBTRACT, 15},
     {A_LSHIFT, 12},

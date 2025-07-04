@@ -61,7 +61,7 @@ public:
     virtual Reg cglong2float(Reg reg) = 0;
     virtual Reg cglong2char(Reg reg) = 0;
     virtual Reg cgchar2long(Reg reg) = 0;
-    virtual Reg cgcall(const char *name, const Reg reg) = 0;
+    virtual Reg cgcall(const char *name, PrimitiveType ret_type) = 0;
     virtual void cgreturn(Reg reg, const char *end_label) = 0;
     virtual Reg cgaddress(Symbol identifier) = 0;
     virtual Reg cgderef(Reg reg, PrimitiveType type) = 0;
@@ -79,5 +79,12 @@ public:
     virtual Reg cgor(Reg r1, Reg r2) = 0;
     virtual Reg cgparamaddr(Symbol identifier) = 0;
     virtual void cgresetparamcount() = 0;
+    virtual void cgadjuststack(int size) = 0;
+    virtual void cgloadparamtostack(Reg reg) = 0;
+    virtual void cgloadparamtoreg(Reg reg, int idx) = 0;
+    virtual void cglocalarrayzeroinit(int base, int left_size, int current_size, int elem_size) = 0;
+    virtual std::vector<Reg> cgprotectscene() = 0; // Protect the scene before generating code for the function call
+    virtual void cgrestorescene(const std::vector<Reg> &protected_regs) = 0; // Restore the protected registers from the stack
+    virtual Reg cgmod(Reg reg1, Reg reg2) = 0; // Generate code for modulo operation
 };
 

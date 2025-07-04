@@ -48,6 +48,7 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
             case A_SUBTRACT: return cgsub(reg1, reg2); // Subtract the two registers and return the result
             case A_MULTIPLY: return cgmul(reg1, reg2); // Multiply the two registers and return the result
             case A_DIVIDE: return cgdiv(reg1, reg2); // Divide the two registers and return the result
+            case A_MOD: return cgmod(reg1, reg2); 
             case A_EQ: ret = cgequal(reg1, reg2); break;
             case A_NE: ret = cgnotequal(reg1, reg2); break;
             case A_LT: ret = cglessthan(reg1, reg2); break;
@@ -58,7 +59,7 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
             case A_OR: ret = cgor(reg1, reg2); break; // Perform bitwise OR operation
             case A_XOR: ret = cgxor(reg1, reg2); break; //
             case A_LSHIFT: ret = cgshl(reg1, reg2); break; // Perform left shift operation
-            case A_RSHIFT: ret = cgshr(reg1, reg2); break; //
+            case A_RSHIFT: ret = cgshr(reg1, reg2); break;
             default:
                 throw std::runtime_error("GenCode::generate: Unknown binary expression type");
         }
@@ -131,7 +132,9 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
             return transformType(x->getExpr()->getPrimitiveType(), x->getPrimitiveType(), reg); // Transform the type of the expression
         } else if (x->getOp() == U_SCALE) {
             Reg leftreg = reg;
-            leftreg.type = P_LONG; // Ensure the left register is treated as a long integer
+            if (leftreg.type != P_LONG) {
+                leftreg = transformType(leftreg.type, P_LONG, leftreg); // Ensure the left register is treated as a long integer
+            }
             Reg rightreg;
             switch (x->getOffset()) {
                 case 2: return(cgshlconst(leftreg, 1));
@@ -154,13 +157,15 @@ Reg GenCode::walkExpr(const std::shared_ptr<ExprNode>& ast) {
         // 在这一步，指针类型会被转换为P_LONG寄存器
         if (!x->isArray()) return cgloadsym(x->getIdentifier(), x->getCalculateType()); // Load the global variable into a register
         else {
+            Reg index;
+            if (x->getIndex() != nullptr){
+                index = walkExpr(x->getIndex()); // Walk the index expression
+                index.type = P_LONG; // Ensure the index is treated as a long integer
+            }
             Reg base;
             if (x->isParam()) base = cgloadsym(x->getIdentifier(), x->getCalculateType());
             else base = cgaddress(x->getIdentifier()); // Load the base address of the array into a register
-            if (x->getIndex() != nullptr){
-                Reg index = walkExpr(x->getIndex()); // Walk the index expression
-                assert(index.type == P_INT);
-                index.type = P_LONG; // Ensure the index is treated as a long integer
+            if (x->getIndex() != nullptr) {
                 return cgadd(base, index);
             }
             return base;
@@ -201,10 +206,15 @@ void GenCode::walkCondition(const std::shared_ptr<ExprNode>& ast, std::string fa
             case A_SUBTRACT: reg1 = cgsub(reg1, reg2); break;// Subtract the two registers and return the result
             case A_MULTIPLY: reg1 = cgmul(reg1, reg2); break;// Multiply the two registers and return the result
             case A_DIVIDE: reg1 = cgdiv(reg1, reg2); break;// Divide the two registers and return the result
+            case A_AND: reg1 = cgand(reg1, reg2); break; // Perform bitwise AND operation
+            case A_OR: reg1 = cgor(reg1, reg2); break; //
+            case A_XOR: reg1 = cgxor(reg1, reg2); break; //
+            case A_LSHIFT: reg1 = cgshl(reg1, reg2); break;
+            case A_RSHIFT: reg1 = cgshr(reg1, reg2); break; 
             default:
                 throw std::runtime_error("GenCode::walkCondition: Unknown binary expression type");
         }
-        reg2 = cgload(Value{ .type = P_INT, .ivalue = 0 }); // Load zero into a register
+        reg2 = cgload(Value{ .type = P_LONG, .ivalue = 0 }); // Load zero into a register
         return cgequaljump(reg1, reg2, false_label.c_str()); // Compare the result with zero and jump if equal
     } else {
         Reg reg1 = walkExpr(ast); // Walk the expression in the condition
@@ -219,7 +229,7 @@ void GenCode::localArrayInit(const std::shared_ptr<ArrayInitializer>& y) {
     PrimitiveType type = y->getPrimitiveType();
     auto exprs = y->getElements();
     auto pos = y->getPosOnStack();
-    for (int i = 0; i < exprs.size(); i++) {
+    for (size_t i = 0; i < exprs.size(); i++) {
         if (auto z = std::dynamic_pointer_cast<ValueNode>(exprs[i])) {
             Symbol sym = {"", type, 5, false, false, pos[i]};
             Reg reg;
@@ -239,6 +249,10 @@ void GenCode::localArrayInit(const std::shared_ptr<ArrayInitializer>& y) {
         } else if (auto z = std::dynamic_pointer_cast<ArrayInitializer>(exprs[i])) {
             localArrayInit(z); 
         }
+    }
+    if (y->getLeftSize()) {
+        auto sym = y->getSymbol();
+        cglocalarrayzeroinit(y->getBaseOffset(), y->getLeftSize(), y->getCurrentSize(), symbol_table.typeToSize(type));
     }
 }
 
@@ -262,7 +276,7 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
             
             cglocalsym(identifier); // Declare a global variable with the given identifier and type
             auto initializer = x->getInitializer(identifier);
-            if (initializer == nullptr) return Reg{.type = P_NONE, .idx = 0};
+            if (initializer == nullptr) continue;;
             if (!identifier.is_array) {
                 Reg reg = walkExpr(initializer);
                 cgstorsym(reg, identifier, x->getVariableType()); // Store the value in the global variable
@@ -275,7 +289,6 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
                     throw std::runtime_error("GenCode::walkStatement: Array initializer expected");
                 }
             }
-            return Reg{.type = P_NONE, .idx = 0};
         }
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<IfStatementNode>(ast)) {
@@ -296,9 +309,8 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         cglabel(if_end.c_str()); // Generate the end label for the if statement
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<WhileStatementNode>(ast)) {
-        std::string while_label_no = labelAllocator.getLabel(LableType::WHILE_LABEL);
-        std::string while_start = "WHILE_START_" + while_label_no;
-        std::string while_end = "WHILE_END_" + while_label_no;
+        std::string while_start = x->getWhileStartLabel(); // Get the start label for the while loop
+        std::string while_end = x->getWhileEndLabel(); // Get the end label for the while loop
         cglabel(while_start.c_str()); // Generate the start label for the while loop
         walkCondition(x->getCondition(), while_end); // Walk the condition and generate code for the jump
         walkStatement(x->getBody()); // Walk the body of the while loop
@@ -306,9 +318,8 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
         cglabel(while_end.c_str()); // Generate the end label for the while loop
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<ForStatementNode>(ast)) {
-        std::string for_label_no = labelAllocator.getLabel(LableType::FOR_LABEL);
-        std::string for_start = "FOR_START_" + for_label_no;
-        std::string for_end = "FOR_END_" + for_label_no;
+        std::string for_start = x->getForStartLabel(); // Get the start label for the for loop
+        std::string for_end = x->getForEndLabel(); // Get the end label for the for loop
         if (x->getPreopStatement() != nullptr) {
             walkStatement(x->getPreopStatement()); // Walk the pre-operation statement
         }
@@ -324,11 +335,17 @@ Reg GenCode::walkStatement(const std::shared_ptr<StatementNode>& ast) {
     } else if (auto x = std::dynamic_pointer_cast<ExprNode>(ast)) {
         // Handle expression node
         Reg reg = walkExpr(x); // Walk the expression node to generate code
-        assemblyCode->freereg(reg); // Free the register after use
+        if (reg.type != P_NONE) assemblyCode->freereg(reg); // Free the register after use
         return Reg{.type = P_NONE, .idx = 0};
     } else if (auto x = std::dynamic_pointer_cast<ReturnStatementNode>(ast)) {
         walkReturn(x);
         return Reg{.type = P_NONE, .idx = 0};
+    } else if (auto x = std::dynamic_pointer_cast<BreakStatementNode>(ast)) {
+        cgjump(x->getLabel().c_str()); // Jump to the break label
+        return Reg{.type = P_NONE, .idx = 0};
+    } else if (auto x = std::dynamic_pointer_cast<ContinueStatementNode>(ast)) {
+        cgjump(x->getLabel().c_str());
+        return Reg{.type = P_NONE, .idx = 0}; // Jump to the continue label
     } else {
         throw std::runtime_error("GenCode::generate: Unknown statement node type");
     }
@@ -390,28 +407,65 @@ void GenCode::generate(const std::shared_ptr<Pragram>& ast) {
 
 // 目前只考虑无参数或者一个参数调用
 Reg GenCode::walkFunctionCall(const std::shared_ptr<FunctionCallNode>& ast) {
-    auto args = ast->getArguments();
-    if (args.size() > 1) {
-        throw std::runtime_error("GenCode::walkFunctionCall: Function calls with more than one argument are not supported yet");
-    }
-    Function func = symbol_table.getFunction(ast->getIdentifier()); // Get the function from the symbol table
-    Reg reg = Reg{.type = func.return_type, .idx = -1};
-    if (args.size() == 1) {
-        // 暂时也不考虑类型转换
-        reg = walkExpr(args[0]); // Walk the argument expression to generate code
-    } 
-    reg = cgcall(ast->getIdentifier().c_str(), reg); // Call the function with the argument
 
-    return reg; // Return a dummy register for now
-    // return cgcall(ast->getIdentifier().name.c_str(), args); // Call the function with the arguments
+    std::vector<Reg> used = cgprotectscene(); // Protect the scene before generating code for the function call
+
+    auto args = ast->getArguments();
+    int stack_offset = 0;
+    if (ast->needAdjustStack()) {
+        assemblyCode->cgadjuststack(8); // Adjust the stack size for the function call
+        stack_offset = 8; // Set the stack offset for the function call
+    } 
+    std::vector<Reg> int_need_load_to_stack;
+    std::vector<Reg> float_need_load_to_stack;
+    int int_param_count = 0;
+    int float_param_count = 0;
+
+    for (const auto& arg : args) {
+        PrimitiveType type = arg->getCalculateType();
+        Reg reg = walkExpr(arg); // Walk the argument expression to generate code
+        
+        if (type == P_FLOAT) {
+            if (float_param_count >= 8) {
+                float_need_load_to_stack.push_back(reg);
+            } else {
+                cgloadparamtoreg(reg, float_param_count); // Load the float parameter to a register
+            }
+            float_param_count++;
+        } else {
+            if (int_param_count >= 6) {
+                int_need_load_to_stack.push_back(reg);
+            } else {
+                cgloadparamtoreg(reg, int_param_count); // Load the integer parameter to a register
+            }
+            int_param_count++;
+        }
+    }
+
+    for (auto reg = int_need_load_to_stack.rbegin(); reg != int_need_load_to_stack.rend(); reg++) {
+        assemblyCode->cgloadparamtostack(*reg); // Load the integer parameter to the stack
+        stack_offset += 8; // Increment the stack offset for each integer parameter
+    }
+
+    for (auto reg = float_need_load_to_stack.rbegin(); reg != float_need_load_to_stack.rend(); reg++) {
+        assemblyCode->cgloadparamtostack(*reg); // Load the float parameter to the stack
+        stack_offset += 8; // Increment the stack offset for each float parameter
+    }
+
+    Function func = symbol_table.getFunction(ast->getIdentifier()); // Get the function from the symbol table
+    Reg reg = cgcall(ast->getIdentifier().c_str(), is_pointer(func.return_type)? P_LONG : func.return_type); // Call the function with the argument
+
+    if (stack_offset) cgadjuststack(-stack_offset);
+    cgrestorescene(used); // Restore the scene after generating code for the function call
+    return reg;
 }
 
 void GenCode::walkReturn(const std::shared_ptr<ReturnStatementNode>& ast) {
-    const char* end_label = (ast->getFunction().name + "_end").c_str();
+    std::string end_label = ast->getFunction().name + "_end";
     if (ast->getExpression() != nullptr) {
         Reg reg = walkExpr(ast->getExpression()); // Walk the return expression to generate code
-        assemblyCode->cgreturn(reg, end_label); // Generate return code with the register
+        assemblyCode->cgreturn(reg, end_label.c_str()); // Generate return code with the register
     } else {
-        assemblyCode->cgreturn(Reg{.type = P_VOID, .idx = 0}, end_label); // Generate return code without a value
+        assemblyCode->cgreturn(Reg{.type = P_VOID, .idx = 0}, end_label.c_str()); // Generate return code without a value
     }
 }

@@ -263,9 +263,25 @@ class WhileStatementNode : public StatementNode {
         std::shared_ptr<StatementNode> getBody() const {
             return body; // Return the body of the while loop
         }
+
+        void setLabels(std::string while_start, std::string while_end) {
+            this->while_start = while_start;
+            this->while_end = while_end;
+        }
+
+        std::string getWhileStartLabel() const {
+            return while_start; // Return the start label for the while loop
+        }
+
+        std::string getWhileEndLabel() const {
+            return while_end; // Return the end label for the while loop
+        }
+
     private:
         std::shared_ptr<ExprNode> condition; // Condition for the while loop
         std::shared_ptr<StatementNode> body; // Body of the while loop
+        std::string while_start;
+        std::string while_end; // Labels for the while loop
 };
 
 
@@ -300,11 +316,28 @@ class ForStatementNode : public StatementNode {
         std::shared_ptr<StatementNode> getPostopStatement() const {
             return postop_stmt; // Return the post-operation statement
         }
+
+        void setLabels(std::string for_start_, std::string for_end_) {
+            for_start = for_start_;
+            for_end = for_end_; // Set the start and end labels for the for loop
+        }
+
+        std::string getForStartLabel() const {
+            return for_start; // Return the start label for the for loop
+        }   
+
+        std::string getForEndLabel() const {
+            return for_end; // Return the end label for the for loop
+        }
+
     private:
         std::shared_ptr<StatementNode> preop_stmt;
         std::shared_ptr<ExprNode> condition; // Condition for the while loop
         std::shared_ptr<StatementNode> body; // Body of the while loop
         std::shared_ptr<StatementNode> postop_stmt;
+
+        std::string for_start; // Start label for the for loop
+        std::string for_end; // End label for the for loop
 
 };
 
@@ -487,4 +520,38 @@ class Pragram: public ASTNode {
     private:
         std::vector<std::shared_ptr<VariableDeclareNode>> global_vars; // List of statements in the program
         std::vector<std::shared_ptr<FunctionDeclareNode>> functions; // List of functions in the program
+};
+
+class BreakStatementNode : public StatementNode {
+    public:
+        BreakStatementNode(std::string label) : label(std::move(label)) {
+            stmt_type = S_BREAK; // Set the statement type to expression
+            type = P_NONE; // Set the type of the break statement to void
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Break Statement" << std::endl; // Print the break statement
+        }
+        std::string getLabel() const {
+            return label; // Return the label associated with the break statement
+        }
+    private:
+        std::string label; // Label associated with the break statement, if any
+};
+
+class ContinueStatementNode : public StatementNode {
+    public:
+        ContinueStatementNode(std::string label) : label(std::move(label)) {
+            stmt_type = S_CONTINUE; // Set the statement type to continue
+            type = P_NONE; // Set the type of the continue statement to void
+        }
+
+        void walk(std::string prefix) override {
+            std::cout << prettyPrint(prefix) << "Continue Statement" << std::endl; // Print the continue statement
+        }
+        std::string getLabel() const {
+            return label; // Return the label associated with the continue statement
+        }
+    private:
+        std::string label; // Label associated with the continue statement, if any
 };

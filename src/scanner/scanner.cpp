@@ -234,6 +234,8 @@ bool Scanner::scan(Token& token) {
             token.type = T_INC; // Increment operator
         }
         else token.type = T_PLUS;
+    } else if (c == '%') {
+        token.type = T_MOD; // Assuming T_MOD is defined in TokenType
     } else if (c == '-') {
         if (peek() == '-') {
             next();

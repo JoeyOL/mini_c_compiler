@@ -187,8 +187,8 @@ class GenCode {
         void cgprintfloat(Reg reg) {
             return assemblyCode->cgprintfloat(reg);
         }
-        Reg cgcall(const char *name, const Reg reg) {
-            return assemblyCode->cgcall(name, reg);
+        Reg cgcall(const char *name, PrimitiveType ret_type) {
+            return assemblyCode->cgcall(name, ret_type); // Call the function with the specified name and return type
         }
         Reg cgaddress(Symbol identifier) {
             return assemblyCode->cgaddress(identifier);
@@ -241,6 +241,30 @@ class GenCode {
         }
         Reg cgparamaddr(Symbol identifier) {
             return assemblyCode->cgparamaddr(identifier); // Get the address of the parameter in the function
+        }
+
+        void cgadjuststack(int size) {
+            assemblyCode->cgadjuststack(size); // Adjust the stack size for function calls
+        }
+
+        void cgloadparamtostack(Reg reg) {
+            assemblyCode->cgloadparamtostack(reg); // Load the parameter into the stack
+        }
+
+        void cgloadparamtoreg(Reg reg, int idx) {
+            assemblyCode->cgloadparamtoreg(reg, idx); // Load the parameter into the register
+        }
+        void cglocalarrayzeroinit(int base, int left_size, int current_size, int elem_size) {
+            assemblyCode->cglocalarrayzeroinit(base, left_size, current_size, elem_size); // Initialize local array to zero
+        }
+        void cgrestorescene(const std::vector<Reg> &protected_regs) {
+            assemblyCode->cgrestorescene(protected_regs); // Restore the protected registers from the stack
+        }
+        std::vector<Reg> cgprotectscene() {
+            return assemblyCode->cgprotectscene(); // Protect the scene before generating code for the function call
+        }
+        Reg cgmod(Reg reg1, Reg reg2) {
+            return assemblyCode->cgmod(reg1, reg2); // Generate code for modulo operation
         }
         Reg walkPragram(const std::shared_ptr<Pragram>& ast);
         Reg walkStatement(const std::shared_ptr<StatementNode>& ast);
