@@ -22,8 +22,8 @@ char Scanner::next() {
         return c;
     }
     char c;
-    source_file.get(c);
-    if (source_file.eof()) {
+    c = source_file[read_index++];
+    if (c == EOF) {
         return 0; // EOF
     }
     if (c == '\n') {
@@ -104,15 +104,6 @@ void Scanner::scanNumeric(Token& token, char c) {
         float_constants[value] = labelAllocator.getLabel(LableType::FLOAT_CONSTANT_LABEL); // Store float constant
     } else {
         putback(c);
-    }
-}
-
-Scanner::Scanner(const std::string& source_path)
-    : line_no(1), column_no(0), putback_char(0), source_path(source_path) {
-
-    source_file.open(source_path, std::ios::in);
-    if (!source_file.is_open()) {
-        throw std::runtime_error("Could not open source file: " + source_path);
     }
 }
 

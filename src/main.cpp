@@ -31,6 +31,7 @@ int main(int argc, char *argv[]) {
         while (scanner.scan(token)) {
             tokens.push_back(token);
         }
+        scanner.release();
         if (enable_log) std::cout << "End of file reached." << std::endl;
 
         Parser parser = Parser(tokens);

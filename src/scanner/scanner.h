@@ -1,15 +1,25 @@
 #include <string>
 #include <fstream>
 #include "common/defs.h"
+#include "../mio/single_include/mio/mio.hpp"
 #pragma once
 
 class Scanner {
     public:
         // Constructor
-        Scanner(const std::string& source_path);
+        Scanner(const std::string& source_path){
+            source_file = mio::mmap_source(source_path);
+            if (!source_file.is_open()) {
+                throw std::runtime_error("Failed to open file: " + source_path);
+            }
+            read_index = 0;
+        }
         // Destructor
         ~Scanner() = default;
         bool scan(Token& token);
+        void release() {
+            source_file.unmap();
+        }
     private:
         std::map<std::string, TokenType> keywords = {
             {"print", T_PRINT},
@@ -30,7 +40,8 @@ class Scanner {
         int column_no;
         char putback_char;
         std::string source_path;
-        std::fstream source_file;
+        mio::mmap_source source_file;
+        int read_index;
 
         void skip();
         void putback(char c);
