@@ -1,0 +1,8 @@
+void main() {
+int jim, fred = 1;
+jim = fred + 8;
+print jim + fred;
+
+int foo = jim + fred;
+print foo + 1;
+}

@@ -410,34 +410,16 @@ public:
 
     void cgprintlong(Reg reg) override {
         // Print the integer value in the specified register
-        if (reg.type == P_INT) {
-            // 如果是int类型，需要先转换为long
-            Reg long_reg = cgint2long(reg);
-            outputFile << "\tmovq\t" << regManager->getRegister(long_reg) << ", %rdi\n"; // Move value to rdi
-            regManager->freeRegister(long_reg);
-        } else if (reg.type == P_LONG) {
-            outputFile << "\tmovq\t" << regManager->getRegister(reg) << ", %rdi\n"; // Move value to rdi
-            regManager->freeRegister(reg); // Free the register after use
-        } else {
-            throw std::runtime_error("GenCode::cgprintlong: Unsupported register type");
-        }
+        outputFile << "\tmovq\t" << regManager->getRegister(reg) << ", %rdi\n"; // Move value to rdi
         outputFile << "\tcall\tprintint\n"; 
+        regManager->freeRegister(reg); // Free the register after use
     }
 
     void cgprintfloat(Reg reg) override {
         // Print the floating-point value in the specified register
-        if (reg.type == P_INT || reg.type == P_LONG) {
-            // 如果是整数类型，需要先转换为浮点
-            Reg float_reg = cgint2float(reg);
-            outputFile << "\tmovsd\t" << regManager->getRegister(float_reg) << ", %xmm0\n"; // Move float value to xmm0
-            regManager->freeRegister(float_reg);
-        } else if (reg.type == P_FLOAT) {
-            outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n"; // Move float value to xmm0
-            regManager->freeRegister(reg); // Free the register after use
-        } else {
-            throw std::runtime_error("GenCode::cgprintfloat: Unsupported register type");
-        }
+        outputFile << "\tmovsd\t" << regManager->getRegister(reg) << ", %xmm0\n"; // Move value to xmm0
         outputFile << "\tcall\tprintfloat\n";
+        regManager->freeRegister(reg); // Free the register after use
     }
 
     void cgfloatconst() {
